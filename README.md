@@ -111,7 +111,7 @@ All 32 NHL teams are supported, organized by conference and division:
 | Minnesota Wild | Los Angeles Kings |
 | Nashville Predators | Seattle Kraken |
 | St. Louis Blues | San Jose Sharks |
-| Utah Hockey Club | Vancouver Canucks |
+| Utah Mammoth | Vancouver Canucks |
 | Winnipeg Jets | Vegas Golden Knights |
 
 ---
