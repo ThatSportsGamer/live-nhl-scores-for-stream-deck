@@ -371,7 +371,7 @@ const TEAMS = {
     'STL': { name: 'Blues',          color: '#002F87' },
     'TBL': { name: 'Lightning',      color: '#002868' },
     'TOR': { name: 'Maple Leafs',    color: '#00205B' },
-    'UTA': { name: 'Hockey Club',    color: '#69B3E7' },
+    'UTA': { name: 'Mammoth',    color: '#69B3E7' },
     'VAN': { name: 'Canucks',        color: '#00843D' },
     'VGK': { name: 'Golden Knights', color: '#B4975A' },
     'WSH': { name: 'Capitals',       color: '#C8102E' },
