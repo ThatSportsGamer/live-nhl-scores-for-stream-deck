@@ -1,14 +1,14 @@
 {
     "Author": "T.J. Lauerman aka ThatSportsGamer",
     "CodePath": "plugin.js",
-    "Description": "Shows live NHL scores on your Stream Deck. Each button tracks one team — see the current score, period, and game status at a glance.",
+    "Description": "Shows live NHL, AHL, and ECHL scores on your Stream Deck. Each button tracks one team — see the current score, period, and game status at a glance.",
     "Name": "Live NHL Scores",
     "UUID": "com.tj.livenhscores",
     "Category": "Live Sports Scores",
     "URL": "https://github.com/ThatSportsGamer/live-nhl-scores-for-stream-deck",
     "Icon": "imgs/plugin-icon",
     "CategoryIcon": "imgs/category-icon",
-    "Version": "1.0.1.0",
+    "Version": "1.1.0.0",
     "SDKVersion": 3,
     "Software": {
         "MinimumVersion": "6.9"
@@ -26,7 +26,7 @@
             "Name": "Live NHL Scores",
             "UUID": "com.tj.livenhscores.score",
             "Icon": "imgs/action-icon",
-            "Tooltip": "Shows live score for your chosen NHL team. Updates every 30 seconds.",
+            "Tooltip": "Shows live score for your chosen NHL, AHL, or ECHL team. Updates every 30 seconds.",
             "PropertyInspectorPath": "property-inspector.html",
             "States": [
                 {

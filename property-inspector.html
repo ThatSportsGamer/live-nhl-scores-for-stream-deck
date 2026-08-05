@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8"/>
-    <title>NHL Score Settings</title>
+    <title>Hockey Score Settings</title>
     <style>
         :root {
             --bg:        #1e1e1e;
@@ -44,6 +44,88 @@
             letter-spacing: .05em;
         }
 
+        .field { margin-bottom: 10px; }
+
+        /* ── Search ── */
+        .search-wrap { position: relative; }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 7px 10px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text);
+            font-size: 13px;
+        }
+
+        input[type="text"]::placeholder { color: #666; }
+        input[type="text"]:focus { outline: none; border-color: var(--accent-hi); }
+
+        .autocomplete-list {
+            position: absolute;
+            top: 100%;
+            left: 0; right: 0;
+            background: var(--surface);
+            border: 1px solid var(--accent-hi);
+            border-top: none;
+            border-radius: 0 0 var(--radius) var(--radius);
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 10;
+            display: none;
+        }
+
+        .autocomplete-list .ac-item {
+            padding: 7px 10px;
+            cursor: pointer;
+            font-size: 13px;
+            color: var(--text);
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .autocomplete-list .ac-item .ac-league {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: .04em;
+            color: #888;
+            background: #1a1a1a;
+            border: 1px solid #444;
+            border-radius: 3px;
+            padding: 1px 5px;
+            flex-shrink: 0;
+        }
+
+        .autocomplete-list .ac-item:last-child { border-bottom: none; }
+        .autocomplete-list .ac-item:hover,
+        .autocomplete-list .ac-item.active { background: var(--accent); color: #fff; }
+        .autocomplete-list .ac-item:hover .ac-league,
+        .autocomplete-list .ac-item.active .ac-league { color: #fff; border-color: rgba(255,255,255,.4); }
+
+        /* ── Divider ── */
+        .or-divider {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 12px 0;
+            color: #555;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+        }
+        .or-divider::before,
+        .or-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border);
+        }
+
+        /* ── Selects ── */
         select {
             width: 100%;
             padding: 7px 10px;
@@ -59,17 +141,23 @@
             background-position: right 10px center;
         }
 
-        select:focus {
-            outline: none;
-            border-color: var(--accent-hi);
+        select:focus { outline: none; border-color: var(--accent-hi); }
+
+        /* ── Selected team banner ── */
+        .selected-team {
+            margin-top: 10px;
+            padding: 8px 10px;
+            background: var(--surface);
+            border-left: 3px solid var(--accent-hi);
+            border-radius: var(--radius);
+            font-size: 12px;
+            color: #ccc;
+            display: none;
         }
 
-        optgroup {
-            color: #888;
-            font-size: 11px;
-            text-transform: uppercase;
-        }
+        .selected-team span { font-weight: bold; color: #fff; }
 
+        /* ── Info box ── */
         .info-box {
             margin-top: 14px;
             padding: 9px 11px;
@@ -83,99 +171,400 @@
         }
 
         .info-box strong { color: var(--text); }
-
-        .selected-team {
-            margin-top: 10px;
-            padding: 8px 10px;
-            background: var(--surface);
-            border-radius: var(--radius);
-            font-size: 12px;
-            color: #ccc;
-            display: none;
-        }
-
-        .selected-team span {
-            font-weight: bold;
-            color: #fff;
-        }
     </style>
 </head>
 <body>
 
-<h2>🏒 Live NHL Scores</h2>
+<h2>🏒 Live Hockey Scores</h2>
 
-<label for="teamSelect">Team</label>
-<select id="teamSelect">
-    <option value="">— Select a team —</option>
+<!-- ── Search ── -->
+<div class="field">
+    <label for="searchBox">Search — any team, any league</label>
+    <div class="search-wrap">
+        <input type="text" id="searchBox" placeholder="e.g. Bruins, Charlotte, Everblades…" autocomplete="off"/>
+        <div class="autocomplete-list" id="autocompleteList"></div>
+    </div>
+</div>
 
-    <optgroup label="Eastern — Atlantic">
-        <option value="BOS">Boston Bruins</option>
-        <option value="BUF">Buffalo Sabres</option>
-        <option value="DET">Detroit Red Wings</option>
-        <option value="FLA">Florida Panthers</option>
-        <option value="MTL">Montréal Canadiens</option>
-        <option value="OTT">Ottawa Senators</option>
-        <option value="TBL">Tampa Bay Lightning</option>
-        <option value="TOR">Toronto Maple Leafs</option>
-    </optgroup>
+<div class="or-divider">or browse</div>
 
-    <optgroup label="Eastern — Metropolitan">
-        <option value="CAR">Carolina Hurricanes</option>
-        <option value="CBJ">Columbus Blue Jackets</option>
-        <option value="NJD">New Jersey Devils</option>
-        <option value="NYI">New York Islanders</option>
-        <option value="NYR">New York Rangers</option>
-        <option value="PHI">Philadelphia Flyers</option>
-        <option value="PIT">Pittsburgh Penguins</option>
-        <option value="WSH">Washington Capitals</option>
-    </optgroup>
+<!-- ── League + Division + Team dropdowns ── -->
+<div class="field">
+    <label for="leagueSelect">League</label>
+    <select id="leagueSelect">
+        <option value="nhl">NHL</option>
+        <option value="ahl">AHL</option>
+        <option value="echl">ECHL</option>
+    </select>
+</div>
 
-    <optgroup label="Western — Central">
-        <option value="CHI">Chicago Blackhawks</option>
-        <option value="COL">Colorado Avalanche</option>
-        <option value="DAL">Dallas Stars</option>
-        <option value="MIN">Minnesota Wild</option>
-        <option value="NSH">Nashville Predators</option>
-        <option value="STL">St. Louis Blues</option>
-        <option value="UTA">Utah Mammoth</option>
-        <option value="WPG">Winnipeg Jets</option>
-    </optgroup>
+<div class="field">
+    <label for="divSelect">Division</label>
+    <select id="divSelect">
+        <option value="">All Divisions</option>
+    </select>
+</div>
 
-    <optgroup label="Western — Pacific">
-        <option value="ANA">Anaheim Ducks</option>
-        <option value="CGY">Calgary Flames</option>
-        <option value="EDM">Edmonton Oilers</option>
-        <option value="LAK">Los Angeles Kings</option>
-        <option value="SEA">Seattle Kraken</option>
-        <option value="SJS">San Jose Sharks</option>
-        <option value="VAN">Vancouver Canucks</option>
-        <option value="VGK">Vegas Golden Knights</option>
-    </optgroup>
-</select>
+<div class="field">
+    <label for="teamSelect">Team</label>
+    <select id="teamSelect">
+        <option value="">— Select a team —</option>
+    </select>
+</div>
 
 <div class="selected-team" id="selectedTeamInfo">
     Tracking: <span id="selectedTeamName"></span>
 </div>
 
-<div class="info-box" style="margin-top: 14px;">
+<div class="info-box">
     <strong>How it works:</strong><br>
     • Scores refresh automatically every <strong>30 seconds</strong><br>
-    • Press the button anytime to open NHL Gamecenter<br>
+    • Press the button anytime to open the game recap or gamecenter<br>
     • Shows score + period/time during live games<br>
-    • Shows start time when a game is scheduled<br>
-    • Shows Final / Final/OT / Final/SO when the game ends
+    • Shows matchup and start time before the game<br>
+    • Shows Final / Final/OT / Final/SO when the game ends<br>
+    • Covers NHL, AHL, and ECHL — switch league above to browse a different one
 </div>
 
 <script>
-    var websocket = null;
-    var uuid = null;
-    var actionContext = null;
-    var actionUUID = null;
+    // ── Team data ─────────────────────────────────────────────────────────────
+    // NHL: value = team abbreviation (matches api-web.nhle.com)
+    // AHL / ECHL: value = numeric HockeyTech team id (matches lscluster.hockeytech.com)
+    var TEAMS = [
+        // ── NHL — Atlantic ──
+        { value: "BOS", abbr: "BOS", name: "Boston Bruins",          league: "nhl", division: "Atlantic" },
+        { value: "BUF", abbr: "BUF", name: "Buffalo Sabres",         league: "nhl", division: "Atlantic" },
+        { value: "DET", abbr: "DET", name: "Detroit Red Wings",      league: "nhl", division: "Atlantic" },
+        { value: "FLA", abbr: "FLA", name: "Florida Panthers",       league: "nhl", division: "Atlantic" },
+        { value: "MTL", abbr: "MTL", name: "Montréal Canadiens",     league: "nhl", division: "Atlantic" },
+        { value: "OTT", abbr: "OTT", name: "Ottawa Senators",        league: "nhl", division: "Atlantic" },
+        { value: "TBL", abbr: "TBL", name: "Tampa Bay Lightning",    league: "nhl", division: "Atlantic" },
+        { value: "TOR", abbr: "TOR", name: "Toronto Maple Leafs",    league: "nhl", division: "Atlantic" },
+        // ── NHL — Metropolitan ──
+        { value: "CAR", abbr: "CAR", name: "Carolina Hurricanes",    league: "nhl", division: "Metropolitan" },
+        { value: "CBJ", abbr: "CBJ", name: "Columbus Blue Jackets",  league: "nhl", division: "Metropolitan" },
+        { value: "NJD", abbr: "NJD", name: "New Jersey Devils",      league: "nhl", division: "Metropolitan" },
+        { value: "NYI", abbr: "NYI", name: "New York Islanders",     league: "nhl", division: "Metropolitan" },
+        { value: "NYR", abbr: "NYR", name: "New York Rangers",       league: "nhl", division: "Metropolitan" },
+        { value: "PHI", abbr: "PHI", name: "Philadelphia Flyers",    league: "nhl", division: "Metropolitan" },
+        { value: "PIT", abbr: "PIT", name: "Pittsburgh Penguins",    league: "nhl", division: "Metropolitan" },
+        { value: "WSH", abbr: "WSH", name: "Washington Capitals",    league: "nhl", division: "Metropolitan" },
+        // ── NHL — Central ──
+        { value: "CHI", abbr: "CHI", name: "Chicago Blackhawks",     league: "nhl", division: "Central" },
+        { value: "COL", abbr: "COL", name: "Colorado Avalanche",     league: "nhl", division: "Central" },
+        { value: "DAL", abbr: "DAL", name: "Dallas Stars",           league: "nhl", division: "Central" },
+        { value: "MIN", abbr: "MIN", name: "Minnesota Wild",         league: "nhl", division: "Central" },
+        { value: "NSH", abbr: "NSH", name: "Nashville Predators",    league: "nhl", division: "Central" },
+        { value: "STL", abbr: "STL", name: "St. Louis Blues",        league: "nhl", division: "Central" },
+        { value: "UTA", abbr: "UTA", name: "Utah Mammoth",           league: "nhl", division: "Central" },
+        { value: "WPG", abbr: "WPG", name: "Winnipeg Jets",          league: "nhl", division: "Central" },
+        // ── NHL — Pacific ──
+        { value: "ANA", abbr: "ANA", name: "Anaheim Ducks",          league: "nhl", division: "Pacific" },
+        { value: "CGY", abbr: "CGY", name: "Calgary Flames",         league: "nhl", division: "Pacific" },
+        { value: "EDM", abbr: "EDM", name: "Edmonton Oilers",        league: "nhl", division: "Pacific" },
+        { value: "LAK", abbr: "LAK", name: "Los Angeles Kings",      league: "nhl", division: "Pacific" },
+        { value: "SEA", abbr: "SEA", name: "Seattle Kraken",         league: "nhl", division: "Pacific" },
+        { value: "SJS", abbr: "SJS", name: "San Jose Sharks",        league: "nhl", division: "Pacific" },
+        { value: "VAN", abbr: "VAN", name: "Vancouver Canucks",      league: "nhl", division: "Pacific" },
+        { value: "VGK", abbr: "VGK", name: "Vegas Golden Knights",   league: "nhl", division: "Pacific" },
 
-    // Called by Stream Deck when the property inspector loads
+        // ── AHL — Atlantic ──
+        { value: "384", abbr: "CLT", name: "Charlotte Checkers",             league: "ahl", division: "Atlantic" },
+        { value: "307", abbr: "HFD", name: "Hartford Wolf Pack",             league: "ahl", division: "Atlantic" },
+        { value: "319", abbr: "HER", name: "Hershey Bears",                  league: "ahl", division: "Atlantic" },
+        { value: "313", abbr: "LV",  name: "Lehigh Valley Phantoms",         league: "ahl", division: "Atlantic" },
+        { value: "309", abbr: "PRO", name: "Providence Bruins",              league: "ahl", division: "Atlantic" },
+        { value: "411", abbr: "SPR", name: "Springfield Thunderbirds",       league: "ahl", division: "Atlantic" },
+        { value: "316", abbr: "WBS", name: "Wilkes-Barre/Scranton Penguins", league: "ahl", division: "Atlantic" },
+        // ── AHL — Central ──
+        { value: "330", abbr: "CHI", name: "Chicago Wolves",         league: "ahl", division: "Central" },
+        { value: "328", abbr: "GR",  name: "Grand Rapids Griffins",  league: "ahl", division: "Central" },
+        { value: "389", abbr: "IA",  name: "Iowa Wild",              league: "ahl", division: "Central" },
+        { value: "321", abbr: "MB",  name: "Manitoba Moose",         league: "ahl", division: "Central" },
+        { value: "327", abbr: "MIL", name: "Milwaukee Admirals",     league: "ahl", division: "Central" },
+        { value: "372", abbr: "RFD", name: "Rockford IceHogs",       league: "ahl", division: "Central" },
+        { value: "380", abbr: "TEX", name: "Texas Stars",            league: "ahl", division: "Central" },
+        // ── AHL — North ──
+        { value: "413", abbr: "BEL", name: "Belleville Senators",    league: "ahl", division: "North" },
+        { value: "373", abbr: "CLE", name: "Cleveland Monsters",     league: "ahl", division: "North" },
+        { value: "457", abbr: "HAM", name: "Hamilton Hammers",       league: "ahl", division: "North" },
+        { value: "415", abbr: "LAV", name: "Laval Rocket",           league: "ahl", division: "North" },
+        { value: "323", abbr: "ROC", name: "Rochester Americans",    league: "ahl", division: "North" },
+        { value: "324", abbr: "SYR", name: "Syracuse Crunch",        league: "ahl", division: "North" },
+        { value: "335", abbr: "TOR", name: "Toronto Marlies",        league: "ahl", division: "North" },
+        { value: "390", abbr: "UTC", name: "Utica Comets",           league: "ahl", division: "North" },
+        // ── AHL — Pacific ──
+        { value: "440", abbr: "ABB", name: "Abbotsford Canucks",         league: "ahl", division: "Pacific" },
+        { value: "402", abbr: "BAK", name: "Bakersfield Condors",        league: "ahl", division: "Pacific" },
+        { value: "444", abbr: "CGY", name: "Calgary Wranglers",          league: "ahl", division: "Pacific" },
+        { value: "445", abbr: "CV",  name: "Coachella Valley Firebirds", league: "ahl", division: "Pacific" },
+        { value: "419", abbr: "COL", name: "Colorado Eagles",            league: "ahl", division: "Pacific" },
+        { value: "437", abbr: "HSK", name: "Henderson Silver Knights",   league: "ahl", division: "Pacific" },
+        { value: "403", abbr: "ONT", name: "Ontario Reign",              league: "ahl", division: "Pacific" },
+        { value: "404", abbr: "SD",  name: "San Diego Gulls",            league: "ahl", division: "Pacific" },
+        { value: "405", abbr: "SJ",  name: "San Jose Barracuda",         league: "ahl", division: "Pacific" },
+        { value: "412", abbr: "TUC", name: "Tucson Roadrunners",         league: "ahl", division: "Pacific" },
+
+        // ── ECHL — Central ──
+        { value: "107", abbr: "BLM", name: "Bloomington Bison",   league: "echl", division: "Central" },
+        { value: "5",   abbr: "CIN", name: "Cincinnati Cyclones", league: "echl", division: "Central" },
+        { value: "60",  abbr: "FW",  name: "Fort Wayne Komets",   league: "echl", division: "Central" },
+        { value: "65",  abbr: "IND", name: "Indy Fuel",           league: "echl", division: "Central" },
+        { value: "50",  abbr: "KAL", name: "Kalamazoo Wings",     league: "echl", division: "Central" },
+        { value: "21",  abbr: "TOL", name: "Toledo Walleye",      league: "echl", division: "Central" },
+        { value: "25",  abbr: "WHL", name: "Wheeling Nailers",    league: "echl", division: "Central" },
+        // ── ECHL — Mountain ──
+        { value: "66",  abbr: "ALN", name: "Allen Americans",       league: "echl", division: "Mountain" },
+        { value: "11",  abbr: "IDH", name: "Idaho Steelheads",      league: "echl", division: "Mountain" },
+        { value: "68",  abbr: "KC",  name: "Kansas City Mavericks", league: "echl", division: "Mountain" },
+        { value: "114", abbr: "NM",  name: "New Mexico Goatheads",  league: "echl", division: "Mountain" },
+        { value: "70",  abbr: "RC",  name: "Rapid City Rush",       league: "echl", division: "Mountain" },
+        { value: "106", abbr: "TAH", name: "Tahoe Knight Monsters", league: "echl", division: "Mountain" },
+        { value: "71",  abbr: "TUL", name: "Tulsa Oilers",          league: "echl", division: "Mountain" },
+        { value: "72",  abbr: "WIC", name: "Wichita Thunder",       league: "echl", division: "Mountain" },
+        // ── ECHL — North ──
+        { value: "74",  abbr: "ADK", name: "Adirondack Thunder",     league: "echl", division: "North" },
+        { value: "108", abbr: "GSO", name: "Greensboro Gargoyles",   league: "echl", division: "North" },
+        { value: "82",  abbr: "MNE", name: "Maine Mariners",         league: "echl", division: "North" },
+        { value: "76",  abbr: "NOR", name: "Norfolk Admirals",       league: "echl", division: "North" },
+        { value: "17",  abbr: "REA", name: "Reading Royals",         league: "echl", division: "North" },
+        { value: "113", abbr: "TRE", name: "Trenton Ironhawks",      league: "echl", division: "North" },
+        { value: "99",  abbr: "TR",  name: "Trois-Rivières Lions",   league: "echl", division: "North" },
+        { value: "77",  abbr: "WOR", name: "Worcester Railers",      league: "echl", division: "North" },
+        // ── ECHL — South ──
+        { value: "10",  abbr: "ATL", name: "Atlanta Gladiators",         league: "echl", division: "South" },
+        { value: "8",   abbr: "FLA", name: "Florida Everblades",         league: "echl", division: "South" },
+        { value: "52",  abbr: "GVL", name: "Greenville Swamp Rabbits",   league: "echl", division: "South" },
+        { value: "79",  abbr: "JAX", name: "Jacksonville Icemen",        league: "echl", division: "South" },
+        { value: "61",  abbr: "ORL", name: "Orlando Solar Bears",        league: "echl", division: "South" },
+        { value: "102", abbr: "SAV", name: "Savannah Ghost Pirates",     league: "echl", division: "South" },
+        { value: "18",  abbr: "SC",  name: "South Carolina Stingrays",   league: "echl", division: "South" },
+    ];
+
+    var LEAGUE_LABEL = { nhl: "NHL", ahl: "AHL", echl: "ECHL" };
+    var DIVISIONS = {
+        nhl:  ["Atlantic", "Metropolitan", "Central", "Pacific"],
+        ahl:  ["Atlantic", "Central", "North", "Pacific"],
+        echl: ["Central", "Mountain", "North", "South"],
+    };
+
+    // ── State ─────────────────────────────────────────────────────────────────
+    var websocket     = null;
+    var uuid          = null;
+    var actionContext = null;
+    var actionUUID    = null;
+    var savedTeamId   = null;
+    var savedLeague   = "nhl";
+
+    // ── Autocomplete (searches every league) ─────────────────────────────────
+    var acList      = document.getElementById('autocompleteList');
+    var searchBox   = document.getElementById('searchBox');
+    var activeIndex = -1;
+
+    function showAutocomplete() {
+        var query = searchBox.value.toLowerCase().trim();
+        acList.innerHTML = '';
+        activeIndex = -1;
+
+        if (!query) { acList.style.display = 'none'; return; }
+
+        var matches = TEAMS.filter(function(t) {
+            return t.name.toLowerCase().indexOf(query) !== -1 ||
+                   t.abbr.toLowerCase().indexOf(query) !== -1;
+        });
+
+        if (!matches.length) { acList.style.display = 'none'; return; }
+
+        matches.forEach(function(t) {
+            var div = document.createElement('div');
+            div.className = 'ac-item';
+
+            var nameSpan = document.createElement('span');
+            nameSpan.textContent = t.name;
+            div.appendChild(nameSpan);
+
+            var leagueSpan = document.createElement('span');
+            leagueSpan.className = 'ac-league';
+            leagueSpan.textContent = LEAGUE_LABEL[t.league];
+            div.appendChild(leagueSpan);
+
+            div.addEventListener('mousedown', function(e) {
+                e.preventDefault(); // keep focus off blur
+                selectTeam(t);
+            });
+            acList.appendChild(div);
+        });
+
+        acList.style.display = 'block';
+    }
+
+    function hideAutocomplete() {
+        acList.style.display = 'none';
+        activeIndex = -1;
+    }
+
+    function navigateAutocomplete(dir) {
+        var items = acList.querySelectorAll('.ac-item');
+        if (!items.length) return;
+        items[activeIndex] && items[activeIndex].classList.remove('active');
+        activeIndex = (activeIndex + dir + items.length) % items.length;
+        items[activeIndex].classList.add('active');
+        items[activeIndex].scrollIntoView({ block: 'nearest' });
+    }
+
+    searchBox.addEventListener('input', showAutocomplete);
+
+    searchBox.addEventListener('keydown', function(e) {
+        if (acList.style.display === 'none') return;
+        if (e.key === 'ArrowDown')  { e.preventDefault(); navigateAutocomplete(1); }
+        if (e.key === 'ArrowUp')    { e.preventDefault(); navigateAutocomplete(-1); }
+        if (e.key === 'Enter') {
+            var active = acList.querySelector('.ac-item.active');
+            if (active) {
+                e.preventDefault();
+                var idx = Array.prototype.indexOf.call(acList.querySelectorAll('.ac-item'), active);
+                var query = searchBox.value.toLowerCase().trim();
+                var matches = TEAMS.filter(function(t) {
+                    return t.name.toLowerCase().indexOf(query) !== -1 ||
+                           t.abbr.toLowerCase().indexOf(query) !== -1;
+                });
+                if (matches[idx]) selectTeam(matches[idx]);
+            }
+        }
+        if (e.key === 'Escape') hideAutocomplete();
+    });
+
+    searchBox.addEventListener('blur', function() {
+        setTimeout(hideAutocomplete, 150);
+    });
+
+    // ── League → Division → Team dropdowns ────────────────────────────────────
+    function renderDivisionSelect() {
+        var league  = document.getElementById('leagueSelect').value;
+        var divSel  = document.getElementById('divSelect');
+        var divs    = DIVISIONS[league] || [];
+
+        divSel.innerHTML = '<option value="">All Divisions</option>';
+        divs.forEach(function(d) {
+            var opt = document.createElement('option');
+            opt.value = d;
+            opt.textContent = d;
+            divSel.appendChild(opt);
+        });
+    }
+
+    function renderTeamSelect() {
+        var league  = document.getElementById('leagueSelect').value;
+        var div     = document.getElementById('divSelect').value;
+        var teamSel = document.getElementById('teamSelect');
+
+        var filtered = TEAMS.filter(function(t) {
+            return t.league === league && (!div || t.division === div);
+        });
+
+        teamSel.innerHTML = '<option value="">— Select a team —</option>';
+        filtered.forEach(function(t) {
+            var opt = document.createElement('option');
+            opt.value = t.value;
+            opt.setAttribute('data-abbr', t.abbr);
+            opt.setAttribute('data-league', t.league);
+            opt.textContent = t.name;
+            teamSel.appendChild(opt);
+        });
+
+        if (savedLeague === league && savedTeamId &&
+            filtered.some(function(t) { return t.value === savedTeamId; })) {
+            teamSel.value = savedTeamId;
+        }
+    }
+
+    // ── Shared selection handler ──────────────────────────────────────────────
+    function selectTeam(t) {
+        savedTeamId = t.value;
+        savedLeague = t.league;
+
+        searchBox.value = t.name;
+        hideAutocomplete();
+
+        document.getElementById('leagueSelect').value = t.league;
+        renderDivisionSelect();
+        document.getElementById('divSelect').value = t.division;
+        renderTeamSelect();
+        document.getElementById('teamSelect').value = t.value;
+
+        showSelectedTeamBanner(t.name, t.league);
+        saveSettings(t.league, t.value, t.abbr, t.name);
+    }
+
+    function showSelectedTeamBanner(name, league) {
+        var infoEl = document.getElementById('selectedTeamInfo');
+        var nameEl = document.getElementById('selectedTeamName');
+        if (name) {
+            nameEl.textContent   = name + ' (' + LEAGUE_LABEL[league] + ')';
+            infoEl.style.display = 'block';
+        } else {
+            infoEl.style.display = 'none';
+        }
+    }
+
+    // ── Settings ──────────────────────────────────────────────────────────────
+    function applySettings(settings) {
+        if (!settings || !settings.teamId) return;
+        savedTeamId = settings.teamId;
+        savedLeague = settings.league || 'nhl';
+
+        var team = TEAMS.find(function(t) { return t.value === settings.teamId && t.league === savedLeague; });
+        if (team) {
+            searchBox.value = team.name;
+            document.getElementById('leagueSelect').value = team.league;
+            renderDivisionSelect();
+            document.getElementById('divSelect').value = team.division;
+            renderTeamSelect();
+            document.getElementById('teamSelect').value = team.value;
+            showSelectedTeamBanner(team.name, team.league);
+        }
+    }
+
+    function saveSettings(league, teamId, teamAbbr, teamName) {
+        if (!websocket || !teamId) return;
+        var payload = { league: league, teamId: teamId, teamAbbr: teamAbbr, teamName: teamName };
+        websocket.send(JSON.stringify({ event: 'setSettings',  context: uuid,        payload: payload }));
+        websocket.send(JSON.stringify({ event: 'sendToPlugin', context: uuid, action: actionUUID, payload: { event: 'settingsChanged', settings: payload } }));
+    }
+
+    // ── Dropdown change handlers ───────────────────────────────────────────────
+    document.getElementById('leagueSelect').addEventListener('change', function() {
+        savedTeamId = null;
+        searchBox.value = '';
+        renderDivisionSelect();
+        renderTeamSelect();
+        showSelectedTeamBanner('');
+    });
+
+    document.getElementById('divSelect').addEventListener('change', function() {
+        savedTeamId = null;
+        searchBox.value = '';
+        renderTeamSelect();
+        showSelectedTeamBanner('');
+    });
+
+    document.getElementById('teamSelect').addEventListener('change', function() {
+        var sel = document.getElementById('teamSelect');
+        if (!sel.value) return;
+        var opt    = sel.options[sel.selectedIndex];
+        var abbr   = opt.getAttribute('data-abbr');
+        var league = opt.getAttribute('data-league');
+        var name   = opt.text;
+        savedTeamId = sel.value;
+        savedLeague = league;
+        searchBox.value = name;
+        showSelectedTeamBanner(name, league);
+        saveSettings(league, sel.value, abbr, name);
+    });
+
+    // ── Stream Deck WebSocket ─────────────────────────────────────────────────
     function connectElgatoStreamDeckSocket(port, propertyInspectorUUID, registerEvent, info, actionInfo) {
         uuid = propertyInspectorUUID;
-
         try {
             var parsed = JSON.parse(actionInfo);
             actionContext = parsed.context;
@@ -185,9 +574,7 @@
         websocket = new WebSocket('ws://127.0.0.1:' + port);
 
         websocket.onopen = function() {
-            // Register the property inspector
             websocket.send(JSON.stringify({ event: registerEvent, uuid: propertyInspectorUUID }));
-            // Request existing settings
             websocket.send(JSON.stringify({ event: 'getSettings', context: propertyInspectorUUID }));
         };
 
@@ -201,40 +588,9 @@
         };
     }
 
-    function applySettings(settings) {
-        if (!settings) return;
-        if (settings.teamAbbr) {
-            var sel = document.getElementById('teamSelect');
-            sel.value = settings.teamAbbr;
-            showSelectedTeam(sel);
-        }
-    }
-
-    function showSelectedTeam(sel) {
-        var infoEl = document.getElementById('selectedTeamInfo');
-        var nameEl = document.getElementById('selectedTeamName');
-        if (sel.value) {
-            nameEl.textContent = sel.options[sel.selectedIndex].text;
-            infoEl.style.display = 'block';
-        } else {
-            infoEl.style.display = 'none';
-        }
-    }
-
-    function saveSettings() {
-        if (!websocket) return;
-        var teamSel  = document.getElementById('teamSelect');
-        var settings = {
-            teamAbbr: teamSel.value,
-        };
-        websocket.send(JSON.stringify({ event: 'setSettings', context: uuid, payload: settings }));
-        websocket.send(JSON.stringify({ event: 'sendToPlugin', context: uuid, action: actionUUID, payload: { event: 'settingsChanged', settings: settings } }));
-    }
-
-    document.getElementById('teamSelect').addEventListener('change', function() {
-        showSelectedTeam(this);
-        if (this.value) saveSettings();
-    });
+    // Initial render
+    renderDivisionSelect();
+    renderTeamSelect();
 </script>
 
 <div style="margin-top: 20px; padding-top: 10px; border-top: 1px solid #444; text-align: center; color: #666; font-size: 10px; line-height: 1.5;">

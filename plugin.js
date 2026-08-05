@@ -1,5 +1,6 @@
 /**
- * NHL Scores — Stream Deck Plugin
+ * Live Hockey Scores — Stream Deck Plugin
+ * Covers NHL, AHL, and ECHL.
  * Uses Node.js built-in modules only (net, https, crypto).
  * No npm packages required.
  */
@@ -15,7 +16,7 @@ const fs     = require('fs');
 
 // ── Logging ───────────────────────────────────────────────────────────────────
 const LOG_FILE = path.join(__dirname, 'plugin.log');
-try { fs.writeFileSync(LOG_FILE, `=== NHL Plugin ${new Date().toISOString()} ===\nNode: ${process.version}\nArgs: ${process.argv.slice(2).join(' ')}\n`); } catch (e) { /* ignore */ }
+try { fs.writeFileSync(LOG_FILE, `=== Hockey Plugin ${new Date().toISOString()} ===\nNode: ${process.version}\nArgs: ${process.argv.slice(2).join(' ')}\n`); } catch (e) { /* ignore */ }
 
 function log(...args) {
     const ts   = new Date().toISOString().slice(11, 19);
@@ -165,7 +166,7 @@ class SimpleWS extends events.EventEmitter {
 }
 
 // ── Plugin state ──────────────────────────────────────────────────────────────
-const instances     = new Map(); // context -> settings
+const instances     = new Map(); // context -> settings ({ league, teamId, teamAbbr, teamName })
 const prevScores    = new Map(); // context -> { awayGoals, homeGoals }
 const prevState     = new Map(); // context -> last known game state string
 const flashing      = new Set();
@@ -215,6 +216,7 @@ function handleEvent({ event, context, payload }) {
             lastRender.delete(context);
             currentGame.delete(context);
             refreshing.delete(context);
+            flashing.delete(context);
             if (refreshTimers.has(context)) {
                 clearInterval(refreshTimers.get(context));
                 refreshTimers.delete(context);
@@ -229,14 +231,15 @@ function handleEvent({ event, context, payload }) {
             break;
 
         case 'keyUp': {
-            const cfg  = instances.get(context);
             const game = currentGame.get(context);
-            if (game && game.gameId) {
-                const url = buildGameUrl(game);
-                log('keyUp — opening URL:', url);
-                ws.send(JSON.stringify({ event: 'openUrl', payload: { url } }));
+            if (game && game.link) {
+                log('keyUp — opening URL:', game.link);
+                ws.send(JSON.stringify({ event: 'openUrl', payload: { url: game.link } }));
             } else {
-                log('keyUp — no game, refreshing');
+                const cfg = instances.get(context) || {};
+                const fallback = scheduleFallbackUrl(cfg.league);
+                log('keyUp — no game, opening fallback:', fallback);
+                if (fallback) ws.send(JSON.stringify({ event: 'openUrl', payload: { url: fallback } }));
                 lastRender.delete(context);
                 refreshButton(context);
             }
@@ -253,34 +256,40 @@ function handleEvent({ event, context, payload }) {
     }
 }
 
+function scheduleFallbackUrl(league) {
+    if (league === 'ahl')  return 'https://theahl.com/stats/schedule';
+    if (league === 'echl') return 'https://echl.com/schedule';
+    return 'https://www.nhl.com/schedule';
+}
+
 // ── Refresh one button ────────────────────────────────────────────────────────
 async function refreshButton(context) {
     if (refreshing.has(context)) { log('Refresh already in progress, skipping'); return; }
     if (flashing.has(context))   { log('Flash in progress, skipping refresh'); return; }
 
     const cfg = instances.get(context);
-    if (!cfg || !cfg.teamAbbr) {
+    if (!cfg || !cfg.teamId) {
         setButton(context, ['Select A', 'Team In', 'Settings']);
         return;
     }
 
+    const league = cfg.league || 'nhl';
+
     refreshing.add(context);
-    log('Refreshing', cfg.teamAbbr);
+    log('Refreshing', league, cfg.teamAbbr || cfg.teamId);
     try {
-        const game = await fetchTodayGame(cfg.teamAbbr);
-        currentGame.set(context, game
-            ? { gameId: game.gameId, gameDate: game.gameDate, awayAbbr: game.awayAbbr, homeAbbr: game.homeAbbr }
-            : null);
+        const game = await fetchGame(league, cfg.teamId);
+        currentGame.set(context, game || null);
 
         // Detect live → final transition and play fireworks
         const prevGameState = prevState.get(context);
         prevState.set(context, game ? game.state : null);
         if (prevGameState === 'live' && game && game.state === 'final') {
             const winnerIsHome = game.homeGoals >= game.awayGoals;
-            const winnerAbbr   = winnerIsHome ? game.homeAbbr : game.awayAbbr;
-            log('Game over — fireworks for', winnerAbbr);
+            const winnerId     = winnerIsHome ? game.homeId : game.awayId;
+            log('Game over — fireworks for', teamName(league, winnerId));
             refreshing.delete(context);
-            playFireworks(context, teamName(winnerAbbr), teamColor(winnerAbbr)).catch(e => log('fireworks error:', e.message));
+            playFireworks(context, teamName(league, winnerId), teamColor(league, winnerId)).catch(e => log('fireworks error:', e.message));
             return;
         }
 
@@ -297,8 +306,8 @@ async function refreshButton(context) {
                 const homeScored = game.homeGoals > prev.homeGoals;
                 if (awayScored || homeScored) {
                     const color = (awayScored && homeScored) ? '#FFFFFF'
-                        : awayScored ? teamColor(game.awayAbbr)
-                                     : teamColor(game.homeAbbr);
+                        : awayScored ? teamColor(league, game.awayId)
+                                     : teamColor(league, game.homeId);
                     log('Goal — flashing', color);
                     refreshing.delete(context);
                     flashButton(context, color, lines, spacing).catch(e => log('flashButton error:', e.message));
@@ -312,7 +321,7 @@ async function refreshButton(context) {
         setButton(context, lines, spacing);
     } catch (err) {
         log('Fetch error:', err.message);
-        setButton(context, [cfg.teamAbbr || 'NHL', 'Err']);
+        setButton(context, [cfg.teamAbbr || league.toUpperCase(), 'Err']);
     } finally {
         refreshing.delete(context);
     }
@@ -320,7 +329,7 @@ async function refreshButton(context) {
 
 // ── Build button display lines ────────────────────────────────────────────────
 function buildLines(game, cfg) {
-    const abbr = cfg.teamAbbr || 'NHL';
+    const abbr = cfg.teamAbbr || (cfg.league || 'NHL').toUpperCase();
     if (!game)                     return [abbr, 'No Game'];
     if (game.state === 'preview')  return [game.matchup, game.time];
     if (game.state === 'ppd')      return [game.matchup, { text: 'PPD',   fs: 16, color: '#E74C3C' }];
@@ -342,63 +351,144 @@ function buildLines(game, cfg) {
     return [abbr, '---'];
 }
 
-// ── Team data (abbreviation → name, primary color) ────────────────────────────
-const TEAMS = {
-    'ANA': { name: 'Ducks',          color: '#F47A38' },
-    'BOS': { name: 'Bruins',         color: '#FCB514' },
-    'BUF': { name: 'Sabres',         color: '#003087' },
-    'CAR': { name: 'Hurricanes',     color: '#CC0000' },
-    'CBJ': { name: 'Blue Jackets',   color: '#002654' },
-    'CGY': { name: 'Flames',         color: '#C8102E' },
-    'CHI': { name: 'Blackhawks',     color: '#CF0A2C' },
-    'COL': { name: 'Avalanche',      color: '#6F263D' },
-    'DAL': { name: 'Stars',          color: '#006847' },
-    'DET': { name: 'Red Wings',      color: '#CE1126' },
-    'EDM': { name: 'Oilers',         color: '#FF4C00' },
-    'FLA': { name: 'Panthers',       color: '#C8102E' },
-    'LAK': { name: 'Kings',          color: '#111111' },
-    'MIN': { name: 'Wild',           color: '#154734' },
-    'MTL': { name: 'Canadiens',      color: '#AF1E2D' },
-    'NJD': { name: 'Devils',         color: '#CE1126' },
-    'NSH': { name: 'Predators',      color: '#FFB81C' },
-    'NYI': { name: 'Islanders',      color: '#00539B' },
-    'NYR': { name: 'Rangers',        color: '#0038A8' },
-    'OTT': { name: 'Senators',       color: '#E31837' },
-    'PHI': { name: 'Flyers',         color: '#F74902' },
-    'PIT': { name: 'Penguins',       color: '#FCB514' },
-    'SEA': { name: 'Kraken',         color: '#001628' },
-    'SJS': { name: 'Sharks',         color: '#006D75' },
-    'STL': { name: 'Blues',          color: '#002F87' },
-    'TBL': { name: 'Lightning',      color: '#002868' },
-    'TOR': { name: 'Maple Leafs',    color: '#00205B' },
-    'UTA': { name: 'Mammoth',    color: '#69B3E7' },
-    'VAN': { name: 'Canucks',        color: '#00843D' },
-    'VGK': { name: 'Golden Knights', color: '#B4975A' },
-    'WSH': { name: 'Capitals',       color: '#C8102E' },
-    'WPG': { name: 'Jets',           color: '#041E42' },
+// ── League config ──────────────────────────────────────────────────────────────
+// AHL / ECHL run on the HockeyTech/LeagueStat platform (lscluster.hockeytech.com) —
+// the same backend that powers theahl.com and echl.com. The key + client_code below
+// were captured from those sites' own public network traffic (same undocumented,
+// no-signup access model as the NHL's api-web.nhle.com). They could rotate without
+// notice; if scores stop loading for AHL/ECHL, that's the first thing to re-check.
+const HOCKEYTECH = {
+    ahl:  { key: 'ccb91f29d6744675', client_code: 'ahl',  site_id: '3' },
+    echl: { key: '2c2b89ea7345cae8', client_code: 'echl', site_id: '0' },
 };
 
-const teamColor = abbr => TEAMS[abbr]?.color || '#FFFFFF';
-const teamName  = abbr => TEAMS[abbr]?.name  || abbr;
+// ── Team data (id → name, division, primary color) ────────────────────────────
+// NHL is keyed by team abbreviation (matches api-web.nhle.com).
+// AHL / ECHL are keyed by numeric HockeyTech team id (matches lscluster.hockeytech.com).
+// AHL/ECHL colors are best-effort approximations of real team branding (the
+// HockeyTech feed doesn't provide hex colors) — safe to refine later.
+const TEAMS = {
+    nhl: {
+        'ANA': { abbr: 'ANA', name: 'Ducks',          color: '#F47A38' },
+        'BOS': { abbr: 'BOS', name: 'Bruins',         color: '#FCB514' },
+        'BUF': { abbr: 'BUF', name: 'Sabres',         color: '#003087' },
+        'CAR': { abbr: 'CAR', name: 'Hurricanes',     color: '#CC0000' },
+        'CBJ': { abbr: 'CBJ', name: 'Blue Jackets',   color: '#002654' },
+        'CGY': { abbr: 'CGY', name: 'Flames',         color: '#C8102E' },
+        'CHI': { abbr: 'CHI', name: 'Blackhawks',     color: '#CF0A2C' },
+        'COL': { abbr: 'COL', name: 'Avalanche',      color: '#6F263D' },
+        'DAL': { abbr: 'DAL', name: 'Stars',          color: '#006847' },
+        'DET': { abbr: 'DET', name: 'Red Wings',      color: '#CE1126' },
+        'EDM': { abbr: 'EDM', name: 'Oilers',         color: '#FF4C00' },
+        'FLA': { abbr: 'FLA', name: 'Panthers',       color: '#C8102E' },
+        'LAK': { abbr: 'LAK', name: 'Kings',          color: '#111111' },
+        'MIN': { abbr: 'MIN', name: 'Wild',           color: '#154734' },
+        'MTL': { abbr: 'MTL', name: 'Canadiens',      color: '#AF1E2D' },
+        'NJD': { abbr: 'NJD', name: 'Devils',         color: '#CE1126' },
+        'NSH': { abbr: 'NSH', name: 'Predators',      color: '#FFB81C' },
+        'NYI': { abbr: 'NYI', name: 'Islanders',      color: '#00539B' },
+        'NYR': { abbr: 'NYR', name: 'Rangers',        color: '#0038A8' },
+        'OTT': { abbr: 'OTT', name: 'Senators',       color: '#E31837' },
+        'PHI': { abbr: 'PHI', name: 'Flyers',         color: '#F74902' },
+        'PIT': { abbr: 'PIT', name: 'Penguins',       color: '#FCB514' },
+        'SEA': { abbr: 'SEA', name: 'Kraken',         color: '#001628' },
+        'SJS': { abbr: 'SJS', name: 'Sharks',         color: '#006D75' },
+        'STL': { abbr: 'STL', name: 'Blues',          color: '#002F87' },
+        'TBL': { abbr: 'TBL', name: 'Lightning',      color: '#002868' },
+        'TOR': { abbr: 'TOR', name: 'Maple Leafs',    color: '#00205B' },
+        'UTA': { abbr: 'UTA', name: 'Mammoth',        color: '#69B3E7' },
+        'VAN': { abbr: 'VAN', name: 'Canucks',        color: '#00843D' },
+        'VGK': { abbr: 'VGK', name: 'Golden Knights', color: '#B4975A' },
+        'WSH': { abbr: 'WSH', name: 'Capitals',       color: '#C8102E' },
+        'WPG': { abbr: 'WPG', name: 'Jets',           color: '#041E42' },
+    },
+    ahl: {
+        '384': { abbr: 'CLT', name: 'Checkers',       color: '#E03A3E' },
+        '307': { abbr: 'HFD', name: 'Wolf Pack',      color: '#0038A8' },
+        '319': { abbr: 'HER', name: 'Bears',          color: '#4E3629' },
+        '313': { abbr: 'LV',  name: 'Phantoms',       color: '#F58426' },
+        '309': { abbr: 'PRO', name: 'Bruins',         color: '#FFB81C' },
+        '411': { abbr: 'SPR', name: 'Thunderbirds',   color: '#0066B3' },
+        '316': { abbr: 'WBS', name: 'Penguins',       color: '#FCB514' },
+        '330': { abbr: 'CHI', name: 'Wolves',         color: '#A6192E' },
+        '328': { abbr: 'GR',  name: 'Griffins',       color: '#CE1126' },
+        '389': { abbr: 'IA',  name: 'Wild',           color: '#154734' },
+        '321': { abbr: 'MB',  name: 'Moose',          color: '#041E42' },
+        '327': { abbr: 'MIL', name: 'Admirals',       color: '#FFB81C' },
+        '372': { abbr: 'RFD', name: 'IceHogs',        color: '#CE0E2D' },
+        '380': { abbr: 'TEX', name: 'Stars',          color: '#006847' },
+        '413': { abbr: 'BEL', name: 'Senators',       color: '#C52032' },
+        '373': { abbr: 'CLE', name: 'Monsters',       color: '#002654' },
+        '457': { abbr: 'HAM', name: 'Hammers',        color: '#FFC627' },
+        '415': { abbr: 'LAV', name: 'Rocket',         color: '#AF1E2D' },
+        '323': { abbr: 'ROC', name: 'Americans',      color: '#002F6C' },
+        '324': { abbr: 'SYR', name: 'Crunch',         color: '#003087' },
+        '335': { abbr: 'TOR', name: 'Marlies',        color: '#00205B' },
+        '390': { abbr: 'UTC', name: 'Comets',         color: '#C8102E' },
+        '440': { abbr: 'ABB', name: 'Canucks',        color: '#00205B' },
+        '402': { abbr: 'BAK', name: 'Condors',        color: '#FF4C00' },
+        '444': { abbr: 'CGY', name: 'Wranglers',      color: '#C8102E' },
+        '445': { abbr: 'CV',  name: 'Firebirds',      color: '#E4572E' },
+        '419': { abbr: 'COL', name: 'Eagles',         color: '#6F263D' },
+        '437': { abbr: 'HSK', name: 'Silver Knights', color: '#B4975A' },
+        '403': { abbr: 'ONT', name: 'Reign',          color: '#582C83' },
+        '404': { abbr: 'SD',  name: 'Gulls',          color: '#F47A38' },
+        '405': { abbr: 'SJ',  name: 'Barracuda',      color: '#006D75' },
+        '412': { abbr: 'TUC', name: 'Roadrunners',    color: '#8DC63F' },
+    },
+    echl: {
+        '107': { abbr: 'BLM', name: 'Bison',           color: '#002855' },
+        '5':   { abbr: 'CIN', name: 'Cyclones',        color: '#003DA5' },
+        '60':  { abbr: 'FW',  name: 'Komets',          color: '#F58025' },
+        '65':  { abbr: 'IND', name: 'Fuel',             color: '#F26522' },
+        '50':  { abbr: 'KAL', name: 'Wings',           color: '#E03A3E' },
+        '21':  { abbr: 'TOL', name: 'Walleye',         color: '#00843D' },
+        '25':  { abbr: 'WHL', name: 'Nailers',         color: '#FFB81C' },
+        '66':  { abbr: 'ALN', name: 'Americans',       color: '#002868' },
+        '11':  { abbr: 'IDH', name: 'Steelheads',      color: '#00563F' },
+        '68':  { abbr: 'KC',  name: 'Mavericks',       color: '#002F6C' },
+        '114': { abbr: 'NM',  name: 'Goatheads',       color: '#C5A253' },
+        '70':  { abbr: 'RC',  name: 'Rush',            color: '#007A87' },
+        '106': { abbr: 'TAH', name: 'Knight Monsters', color: '#003057' },
+        '71':  { abbr: 'TUL', name: 'Oilers',          color: '#F26522' },
+        '72':  { abbr: 'WIC', name: 'Thunder',         color: '#002D62' },
+        '74':  { abbr: 'ADK', name: 'Thunder',         color: '#002855' },
+        '108': { abbr: 'GSO', name: 'Gargoyles',       color: '#4B0082' },
+        '82':  { abbr: 'MNE', name: 'Mariners',        color: '#002F6C' },
+        '76':  { abbr: 'NOR', name: 'Admirals',        color: '#041E42' },
+        '17':  { abbr: 'REA', name: 'Royals',          color: '#4B2E83' },
+        '113': { abbr: 'TRE', name: 'Ironhawks',       color: '#1C1C1C' },
+        '99':  { abbr: 'TR',  name: 'Lions',           color: '#C8102E' },
+        '77':  { abbr: 'WOR', name: 'Railers',         color: '#0A3161' },
+        '10':  { abbr: 'ATL', name: 'Gladiators',      color: '#C8102E' },
+        '8':   { abbr: 'FLA', name: 'Everblades',      color: '#002F6C' },
+        '52':  { abbr: 'GVL', name: 'Swamp Rabbits',   color: '#00843D' },
+        '79':  { abbr: 'JAX', name: 'Icemen',          color: '#041E42' },
+        '61':  { abbr: 'ORL', name: 'Solar Bears',     color: '#0033A0' },
+        '102': { abbr: 'SAV', name: 'Ghost Pirates',   color: '#00A99D' },
+        '18':  { abbr: 'SC',  name: 'Stingrays',       color: '#002F6C' },
+    },
+};
 
-// ── Period label ──────────────────────────────────────────────────────────────
+const teamColor = (league, id) => TEAMS[league]?.[id]?.color || '#FFFFFF';
+const teamName  = (league, id) => TEAMS[league]?.[id]?.name  || (id || '');
+const teamAbbr  = (league, id) => TEAMS[league]?.[id]?.abbr  || String(id || '???');
+
+// ── Period label (NHL only — AHL/ECHL use the feed's own period names) ────────
 function periodLabel(period) {
     if (period === 4) return 'OT';
     if (period >= 5)  return 'SO';
     return ['', '1st', '2nd', '3rd'][period] || (period + 'th');
 }
 
-// ── Game URL ──────────────────────────────────────────────────────────────────
-function buildGameUrl(game) {
-    if (!game || !game.gameId) return 'https://www.nhl.com';
-    const away = game.awayAbbr.toLowerCase();
-    const home = game.homeAbbr.toLowerCase();
-    const date = (game.gameDate || '').replace(/-/g, '/');
-    return `https://www.nhl.com/gamecenter/${away}-vs-${home}/${date}/${game.gameId}`;
+// ── Fetch dispatcher ──────────────────────────────────────────────────────────
+function fetchGame(league, teamId) {
+    if (league === 'ahl' || league === 'echl') return fetchHockeyTechGame(league, teamId);
+    return fetchNhlGame(teamId);
 }
 
 // ── NHL API ───────────────────────────────────────────────────────────────────
-function fetchTodayGame(teamAbbr) {
+function fetchNhlGame(teamAbbrVal) {
     return new Promise((resolve, reject) => {
         const now = new Date();
         // Don't roll to the next day's schedule until 2am — covers late-running games
@@ -408,11 +498,11 @@ function fetchTodayGame(teamAbbr) {
                      String(now.getDate()).padStart(2, '0');
         const url = 'https://api-web.nhle.com/v1/score/' + date;
 
-        const req = https.get(url, { headers: { 'User-Agent': 'StreamDeckNHLScores/1.0' } }, res => {
+        const req = https.get(url, { headers: { 'User-Agent': 'StreamDeckHockeyScores/1.0' } }, res => {
             let body = '';
             res.on('data', chunk => body += chunk);
             res.on('end', () => {
-                try { resolve(parseScores(JSON.parse(body), teamAbbr)); }
+                try { resolve(parseNhlScores(JSON.parse(body), teamAbbrVal)); }
                 catch (e) { reject(e); }
             });
         });
@@ -422,34 +512,36 @@ function fetchTodayGame(teamAbbr) {
     });
 }
 
-function parseScores(data, teamAbbr) {
+function parseNhlScores(data, teamAbbrVal) {
     try {
         const games = data?.games;
-        if (!games?.length) { log('API: no games today'); return null; }
+        if (!games?.length) { log('NHL API: no games today'); return null; }
 
         const g = games.find(g =>
-            g?.awayTeam?.abbrev === teamAbbr || g?.homeTeam?.abbrev === teamAbbr
+            g?.awayTeam?.abbrev === teamAbbrVal || g?.homeTeam?.abbrev === teamAbbrVal
         );
-        if (!g) { log('API: no game for', teamAbbr); return null; }
+        if (!g) { log('NHL API: no game for', teamAbbrVal); return null; }
 
-        const awayAbbr = g.awayTeam?.abbrev || '???';
-        const homeAbbr = g.homeTeam?.abbrev || '???';
+        const awayId   = g.awayTeam?.abbrev || '???';
+        const homeId   = g.homeTeam?.abbrev || '???';
+        const awayAbbr = awayId, homeAbbr = homeId;
         const matchup  = awayAbbr + ' @ ' + homeAbbr;
         const gameId   = g.id;
         const gameDate = g.gameDate || '';
         const state    = g.gameState || '';
+        const link     = buildNhlGameUrl(awayAbbr, homeAbbr, gameDate, gameId);
 
-        log('API:', state, matchup, 'id=' + gameId);
+        log('NHL API:', state, matchup, 'id=' + gameId);
 
         // Postponed / cancelled
         const schedState = (g.gameScheduleState || '').toUpperCase();
         if (schedState === 'PPD' || schedState === 'CNCL') {
-            return { state: 'ppd', matchup, gameId, gameDate, awayAbbr, homeAbbr };
+            return { state: 'ppd', matchup, awayId, homeId, awayAbbr, homeAbbr, link };
         }
 
         // Pre-game / future
         if (state === 'FUT' || state === 'PRE') {
-            return { state: 'preview', matchup, time: fmtTime(g.startTimeUTC), gameId, gameDate, awayAbbr, homeAbbr };
+            return { state: 'preview', matchup, time: fmtTime(g.startTimeUTC), awayId, homeId, awayAbbr, homeAbbr, link };
         }
 
         const awayGoals = g.awayTeam?.score ?? 0;
@@ -458,24 +550,138 @@ function parseScores(data, teamAbbr) {
         // Final
         if (state === 'FINAL' || state === 'OFF') {
             const endedIn = g.gameOutcome?.lastPeriodType || 'REG'; // 'REG', 'OT', 'SO'
-            return { state: 'final', matchup, awayAbbr, homeAbbr, awayGoals, homeGoals, endedIn, gameId, gameDate };
+            return { state: 'final', matchup, awayId, homeId, awayAbbr, homeAbbr, awayGoals, homeGoals, endedIn, link };
         }
 
         // Live (LIVE or CRIT)
-        const period        = g.period || 1;
-        const timeRemaining = g.clock?.timeRemaining || '??:??';
+        const period         = g.period || 1;
+        const timeRemaining  = g.clock?.timeRemaining || '??:??';
         const inIntermission = g.clock?.inIntermission || false;
-        const pLabel        = periodLabel(period);
-        const periodStr     = pLabel === 'SO'   ? 'SO'
-                            : inIntermission     ? pLabel + ' INT'
-                            : pLabel + ' ' + timeRemaining;
+        const pLabel         = periodLabel(period);
+        const periodStr      = pLabel === 'SO'   ? 'SO'
+                             : inIntermission     ? pLabel + ' INT'
+                             : pLabel + ' ' + timeRemaining;
 
-        return { state: 'live', matchup, awayAbbr, homeAbbr, awayGoals, homeGoals, period, periodStr, gameId, gameDate };
+        return { state: 'live', matchup, awayId, homeId, awayAbbr, homeAbbr, awayGoals, homeGoals, period, periodStr, link };
 
     } catch (e) {
-        log('parseScores error:', e.message);
+        log('parseNhlScores error:', e.message);
         return null;
     }
+}
+
+function buildNhlGameUrl(awayAbbr, homeAbbr, gameDate, gameId) {
+    if (!gameId) return 'https://www.nhl.com';
+    const away = awayAbbr.toLowerCase();
+    const home = homeAbbr.toLowerCase();
+    const date = (gameDate || '').replace(/-/g, '/');
+    return `https://www.nhl.com/gamecenter/${away}-vs-${home}/${date}/${gameId}`;
+}
+
+// ── AHL / ECHL — HockeyTech API ────────────────────────────────────────────────
+function fetchHockeyTechGame(league, teamId) {
+    const conf = HOCKEYTECH[league];
+    return new Promise((resolve, reject) => {
+        const url = 'https://lscluster.hockeytech.com/feed/index.php' +
+            '?feed=modulekit&view=scorebar&numberofdaysback=3&numberofdaysahead=3' +
+            '&key=' + conf.key + '&client_code=' + conf.client_code + '&site_id=' + conf.site_id +
+            '&lang=en&fmt=json';
+
+        const req = https.get(url, { headers: { 'User-Agent': 'StreamDeckHockeyScores/1.0' } }, res => {
+            let body = '';
+            res.on('data', chunk => body += chunk);
+            res.on('end', () => {
+                try { resolve(parseHockeyTechScores(JSON.parse(body), league, teamId)); }
+                catch (e) { reject(e); }
+            });
+        });
+
+        req.on('error', reject);
+        req.setTimeout(10_000, () => { req.destroy(); reject(new Error('Request timed out')); });
+    });
+}
+
+// Picks the single most relevant game for this team out of the ±3 day window:
+// a game in progress beats an upcoming game, which beats a past final (so the
+// button holds the last result until the next game appears on the schedule).
+function parseHockeyTechScores(data, league, teamId) {
+    try {
+        const games = data?.SiteKit?.Scorebar;
+        if (!games?.length) { log(league.toUpperCase() + ' API: no games in window'); return null; }
+
+        const matches = games.filter(g => String(g.HomeID) === String(teamId) || String(g.VisitorID) === String(teamId));
+        if (!matches.length) { log(league.toUpperCase() + ' API: no games found for team', teamId); return null; }
+
+        let best = null, bestRank = -1, bestTime = null;
+        for (const g of matches) {
+            const rank = classifyHockeyTechStatus(g).rank;
+            const time = new Date(g.GameDateISO8601 || g.Date).getTime();
+            if (rank > bestRank) {
+                best = g; bestRank = rank; bestTime = time;
+            } else if (rank === bestRank) {
+                if (rank === 2 && time < bestTime) { best = g; bestTime = time; } // soonest upcoming
+                if (rank === 1 && time > bestTime) { best = g; bestTime = time; } // most recent final
+            }
+        }
+        return parseHockeyTechGame(best, league);
+    } catch (e) {
+        log('parseHockeyTechScores error:', e.message);
+        return null;
+    }
+}
+
+// The HockeyTech scorebar feed doesn't document numeric GameStatus codes, so
+// state is derived from the human-readable GameStatusString(Long) fields plus
+// the scheduled start time — the same signals the AHL/ECHL sites' own scoreboard
+// widgets read. NOTE: written and tested against off-season data (finals only);
+// worth spot-checking once AHL/ECHL preseason games are live in October.
+function classifyHockeyTechStatus(g) {
+    const str  = (g.GameStatusString || '').toLowerCase();
+    const long = (g.GameStatusStringLong || '').toLowerCase();
+
+    if (str.includes('ppd') || str.includes('postpon') || str.includes('cancel')) {
+        return { state: 'ppd', rank: 1 };
+    }
+    if (str.includes('final')) return { state: 'final', rank: 1 };
+
+    const startMs = new Date(g.GameDateISO8601 || g.Date).getTime();
+    if (Number.isFinite(startMs) && Date.now() < startMs) return { state: 'preview', rank: 2 };
+
+    return { state: 'live', rank: 3 };
+}
+
+function parseHockeyTechGame(g, league) {
+    const awayId   = String(g.VisitorID);
+    const homeId   = String(g.HomeID);
+    const awayAbbr = g.VisitorCode || teamAbbr(league, awayId);
+    const homeAbbr = g.HomeCode    || teamAbbr(league, homeId);
+    const matchup  = awayAbbr + ' @ ' + homeAbbr;
+    const link     = 'https://lscluster.hockeytech.com/game_reports/official-game-report.php' +
+                      '?client_code=' + HOCKEYTECH[league].client_code + '&game_id=' + g.ID + '&lang_id=1';
+
+    const status = classifyHockeyTechStatus(g);
+
+    if (status.state === 'ppd')     return { state: 'ppd', matchup, awayId, homeId, awayAbbr, homeAbbr, link };
+    if (status.state === 'preview') return { state: 'preview', matchup, time: g.ScheduledFormattedTime || fmtTime(g.GameDateISO8601), awayId, homeId, awayAbbr, homeAbbr, link };
+
+    const awayGoals = parseInt(g.VisitorGoals, 10) || 0;
+    const homeGoals = parseInt(g.HomeGoals, 10)    || 0;
+
+    if (status.state === 'final') {
+        const long    = (g.GameStatusStringLong || '').toUpperCase();
+        const endedIn = long.includes('SO') ? 'SO' : long.includes('OT') ? 'OT' : 'REG';
+        return { state: 'final', matchup, awayId, homeId, awayAbbr, homeAbbr, awayGoals, homeGoals, endedIn, link };
+    }
+
+    // Live — the feed's own period naming (e.g. "3rd", "OT1") is already
+    // display-ready, unlike the NHL feed which only gives a numeric period.
+    const pLabel    = g.PeriodNameShort || (g.Period ? g.Period + '' : '1st');
+    const inInt     = g.Intermission === '1' || g.Intermission === 1;
+    const periodStr = /so/i.test(pLabel)  ? 'SO'
+                     : inInt               ? pLabel + ' INT'
+                     : pLabel + ' ' + (g.GameClock || '');
+
+    return { state: 'live', matchup, awayId, homeId, awayAbbr, homeAbbr, awayGoals, homeGoals, period: parseInt(g.Period, 10) || 1, periodStr, link };
 }
 
 function fmtTime(iso) {
