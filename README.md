@@ -21,6 +21,21 @@ A Stream Deck plugin that shows live hockey scores directly on your buttons — 
 
 ---
 
+## Recent Updates
+
+**v1.1.0.0**
+- Added AHL and ECHL support — 62 more teams alongside the NHL, sourced from the HockeyTech/LeagueStat feed used by theahl.com and echl.com
+- Rebuilt the settings panel with a search box (type a team or city name for instant results across all three leagues), a league selector, and a division-filtered team dropdown
+- Button link now opens the right destination per league — NHL Gamecenter, or the AHL/ECHL official game report
+
+**v1.0.1.0**
+- Updated Utah's team name to Utah Mammoth
+
+**v1.0.0.0**
+- Initial release — live scores, pre-game/final states, score-change flash, NHL Gamecenter shortcut, and all 32 NHL teams
+
+---
+
 ## Requirements
 
 - [Elgato Stream Deck](https://www.elgato.com/stream-deck) hardware
@@ -33,7 +48,7 @@ A Stream Deck plugin that shows live hockey scores directly on your buttons — 
 
 1. Download the latest **`Live NHL Scores.streamDeckPlugin`** from the [Releases](../../releases) page
 2. Double-click the file — Stream Deck will install it automatically
-3. The plugin will appear in the Stream Deck action picker under **Live Sports Scores**
+3. The plugin will appear in the Stream Deck action picker under **Live NHL Scores**
 
 ---
 
@@ -93,85 +108,6 @@ No Game
 
 ---
 
-## Supported Teams
-
-**94 teams across 3 leagues** — search by name/city, or browse league → division → team in the settings panel.
-
-### NHL (32 teams)
-
-| Eastern — Atlantic | Eastern — Metropolitan |
-|---|---|
-| Boston Bruins | Carolina Hurricanes |
-| Buffalo Sabres | Columbus Blue Jackets |
-| Detroit Red Wings | New Jersey Devils |
-| Florida Panthers | New York Islanders |
-| Montréal Canadiens | New York Rangers |
-| Ottawa Senators | Philadelphia Flyers |
-| Tampa Bay Lightning | Pittsburgh Penguins |
-| Toronto Maple Leafs | Washington Capitals |
-
-| Western — Central | Western — Pacific |
-|---|---|
-| Chicago Blackhawks | Anaheim Ducks |
-| Colorado Avalanche | Calgary Flames |
-| Dallas Stars | Edmonton Oilers |
-| Minnesota Wild | Los Angeles Kings |
-| Nashville Predators | Seattle Kraken |
-| St. Louis Blues | San Jose Sharks |
-| Utah Mammoth | Vancouver Canucks |
-| Winnipeg Jets | Vegas Golden Knights |
-
-### AHL (32 teams)
-
-| Atlantic | Central |
-|---|---|
-| Charlotte Checkers | Chicago Wolves |
-| Hartford Wolf Pack | Grand Rapids Griffins |
-| Hershey Bears | Iowa Wild |
-| Lehigh Valley Phantoms | Manitoba Moose |
-| Providence Bruins | Milwaukee Admirals |
-| Springfield Thunderbirds | Rockford IceHogs |
-| Wilkes-Barre/Scranton Penguins | Texas Stars |
-
-| North | Pacific |
-|---|---|
-| Belleville Senators | Abbotsford Canucks |
-| Cleveland Monsters | Bakersfield Condors |
-| Hamilton Hammers | Calgary Wranglers |
-| Laval Rocket | Coachella Valley Firebirds |
-| Rochester Americans | Colorado Eagles |
-| Syracuse Crunch | Henderson Silver Knights |
-| Toronto Marlies | Ontario Reign |
-| Utica Comets | San Diego Gulls |
-| | San Jose Barracuda |
-| | Tucson Roadrunners |
-
-### ECHL (30 teams)
-
-| Central | Mountain |
-|---|---|
-| Bloomington Bison | Allen Americans |
-| Cincinnati Cyclones | Idaho Steelheads |
-| Fort Wayne Komets | Kansas City Mavericks |
-| Indy Fuel | New Mexico Goatheads |
-| Kalamazoo Wings | Rapid City Rush |
-| Toledo Walleye | Tahoe Knight Monsters |
-| Wheeling Nailers | Tulsa Oilers |
-| | Wichita Thunder |
-
-| North | South |
-|---|---|
-| Adirondack Thunder | Atlanta Gladiators |
-| Greensboro Gargoyles | Florida Everblades |
-| Maine Mariners | Greenville Swamp Rabbits |
-| Norfolk Admirals | Jacksonville Icemen |
-| Reading Royals | Orlando Solar Bears |
-| Trenton Ironhawks | Savannah Ghost Pirates |
-| Trois-Rivières Lions | South Carolina Stingrays |
-| Worcester Railers | |
-
----
-
 ## How It Works
 
 NHL scores come from the [NHL's free public API](https://api-web.nhle.com). AHL and ECHL scores come from the HockeyTech/LeagueStat feed at `lscluster.hockeytech.com` — the same backend that powers theahl.com and echl.com. Both are polled once every 30 seconds per button. No API key or account is required for either. The plugin is fully self-contained — it uses only Node.js built-in modules and requires no external dependencies.
@@ -189,21 +125,6 @@ Open Stream Deck → Preferences → Plugins, select **Live NHL Scores**, and cl
 ## Contributing
 
 Bug reports and feature requests are welcome — open an [Issue](../../issues) to get started.
-
----
-
-## Changelog
-
-**1.1.0.0**
-- Added AHL and ECHL support — 62 more teams alongside the NHL, sourced from the HockeyTech/LeagueStat feed used by theahl.com and echl.com
-- Rebuilt the settings panel with a search box (type a team or city name for instant results across all three leagues), a league selector, and a division-filtered team dropdown
-- Button link now opens the right destination per league — NHL Gamecenter, or the AHL/ECHL official game report
-
-**1.0.1.0**
-- Updated Utah's team name to Utah Mammoth
-
-**1.0.0.0**
-- Initial release — live scores, pre-game/final states, score-change flash, NHL Gamecenter shortcut, and all 32 NHL teams
 
 ---
 
