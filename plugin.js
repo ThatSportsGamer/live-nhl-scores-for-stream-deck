@@ -247,7 +247,9 @@ function handleEvent({ event, context, payload }) {
         }
 
         case 'sendToPlugin':
-            if (payload && payload.settings) {
+            if (payload && payload.event === 'requestTeams') {
+                sendLiveTeams(context).catch(e => log('sendLiveTeams error:', e.message));
+            } else if (payload && payload.settings) {
                 instances.set(context, payload.settings);
                 lastRender.delete(context);
                 refreshButton(context);
@@ -331,6 +333,11 @@ async function refreshButton(context) {
 function buildLines(game, cfg) {
     const abbr = cfg.teamAbbr || (cfg.league || 'NHL').toUpperCase();
     if (!game)                     return [abbr, 'No Game'];
+    if (game.state === 'nextgame') return [
+        { text: 'Next Game', fs: 12, color: '#AAAAAA' },
+        game.matchup,
+        game.dateLabel + ' ' + game.time,
+    ];
     if (game.state === 'preview')  return [game.matchup, game.time];
     if (game.state === 'ppd')      return [game.matchup, { text: 'PPD',   fs: 16, color: '#E74C3C' }];
     if (game.state === 'live')     return [
@@ -502,7 +509,12 @@ function fetchNhlGame(teamAbbrVal) {
             let body = '';
             res.on('data', chunk => body += chunk);
             res.on('end', () => {
-                try { resolve(parseNhlScores(JSON.parse(body), teamAbbrVal)); }
+                try {
+                    const game = parseNhlScores(JSON.parse(body), teamAbbrVal);
+                    if (game) return resolve(game);
+                    // Off day — look ahead instead of a dead-end "No Game"
+                    fetchNhlNextGame(teamAbbrVal).then(resolve).catch(() => resolve(null));
+                }
                 catch (e) { reject(e); }
             });
         });
@@ -510,6 +522,57 @@ function fetchNhlGame(teamAbbrVal) {
         req.on('error', reject);
         req.setTimeout(10_000, () => { req.destroy(); reject(new Error('Request timed out')); });
     });
+}
+
+// GET a URL as parsed JSON, following redirects (api-web.nhle.com uses a 307 to
+// resolve keywords like ".../now" to a concrete dated URL — plain https.get()
+// does not follow those on its own).
+function httpsGetJson(url, redirectsLeft = 3) {
+    return new Promise((resolve, reject) => {
+        const req = https.get(url, { headers: { 'User-Agent': 'StreamDeckHockeyScores/1.0' } }, res => {
+            if ([301, 302, 307, 308].includes(res.statusCode) && res.headers.location && redirectsLeft > 0) {
+                res.resume();
+                httpsGetJson(res.headers.location, redirectsLeft - 1).then(resolve).catch(reject);
+                return;
+            }
+            let body = '';
+            res.on('data', chunk => body += chunk);
+            res.on('end', () => {
+                try { resolve(JSON.parse(body)); }
+                catch (e) { reject(e); }
+            });
+        });
+
+        req.on('error', reject);
+        req.setTimeout(10_000, () => { req.destroy(); reject(new Error('Request timed out')); });
+    });
+}
+
+// ── Next scheduled game (shown on off days instead of a dead-end "No Game") ──
+// The club-schedule "week" view returns a rolling window starting today; chase
+// nextStartDate forward a few times to cover gaps longer than a week (All-Star
+// break, playoff layoffs) without walking arbitrarily far into the off-season.
+async function fetchNhlNextGame(teamAbbrVal, weekStart = 'now', hopsLeft = 4) {
+    const url  = 'https://api-web.nhle.com/v1/club-schedule/' + teamAbbrVal + '/week/' + weekStart;
+    const data = await httpsGetJson(url);
+
+    const games = (data?.games || []).slice().sort((a, b) => new Date(a.startTimeUTC) - new Date(b.startTimeUTC));
+    const g     = games.find(g => g.gameState === 'FUT' || g.gameState === 'PRE');
+
+    if (g) {
+        const awayId    = g.awayTeam?.abbrev || '???';
+        const homeId    = g.homeTeam?.abbrev || '???';
+        const matchup   = awayId + ' @ ' + homeId;
+        const gameDate  = g.gameDate || '';
+        const link      = buildNhlGameUrl(awayId, homeId, gameDate, g.id);
+        const dateLabel = new Date(g.startTimeUTC).toLocaleDateString([], { month: 'numeric', day: 'numeric' });
+        return { state: 'nextgame', matchup, dateLabel, time: fmtTime(g.startTimeUTC), awayId, homeId, link };
+    }
+
+    if (hopsLeft > 0 && data?.nextStartDate) {
+        return fetchNhlNextGame(teamAbbrVal, data.nextStartDate, hopsLeft - 1);
+    }
+    return null;
 }
 
 function parseNhlScores(data, teamAbbrVal) {
@@ -579,26 +642,54 @@ function buildNhlGameUrl(awayAbbr, homeAbbr, gameDate, gameId) {
 }
 
 // ── AHL / ECHL — HockeyTech API ────────────────────────────────────────────────
-function fetchHockeyTechGame(league, teamId) {
+async function fetchHockeyTechGame(league, teamId) {
     const conf = HOCKEYTECH[league];
-    return new Promise((resolve, reject) => {
-        const url = 'https://lscluster.hockeytech.com/feed/index.php' +
-            '?feed=modulekit&view=scorebar&numberofdaysback=3&numberofdaysahead=3' +
-            '&key=' + conf.key + '&client_code=' + conf.client_code + '&site_id=' + conf.site_id +
-            '&lang=en&fmt=json';
+    const url  = 'https://lscluster.hockeytech.com/feed/index.php' +
+        '?feed=modulekit&view=scorebar&numberofdaysback=3&numberofdaysahead=3' +
+        '&key=' + conf.key + '&client_code=' + conf.client_code + '&site_id=' + conf.site_id +
+        '&lang=en&fmt=json';
 
-        const req = https.get(url, { headers: { 'User-Agent': 'StreamDeckHockeyScores/1.0' } }, res => {
-            let body = '';
-            res.on('data', chunk => body += chunk);
-            res.on('end', () => {
-                try { resolve(parseHockeyTechScores(JSON.parse(body), league, teamId)); }
-                catch (e) { reject(e); }
-            });
-        });
+    const data = await httpsGetJson(url);
+    const game = parseHockeyTechScores(data, league, teamId);
+    if (game) return game;
 
-        req.on('error', reject);
-        req.setTimeout(10_000, () => { req.destroy(); reject(new Error('Request timed out')); });
-    });
+    // Off day — look ahead instead of a dead-end "No Game"
+    try { return await fetchHockeyTechNextGame(league, teamId); }
+    catch (e) { log('fetchHockeyTechNextGame error:', e.message); return null; }
+}
+
+// ── Next scheduled game (shown on off days instead of a dead-end "No Game") ──
+// Widens the window to a forward-only 21 days (roughly MLB's 2-week lookahead,
+// padded for AHL/ECHL's less frequent schedule) since the normal ±3 day scorebar
+// call above already came back empty for this team.
+async function fetchHockeyTechNextGame(league, teamId) {
+    const conf = HOCKEYTECH[league];
+    const url  = 'https://lscluster.hockeytech.com/feed/index.php' +
+        '?feed=modulekit&view=scorebar&numberofdaysback=0&numberofdaysahead=21' +
+        '&key=' + conf.key + '&client_code=' + conf.client_code + '&site_id=' + conf.site_id +
+        '&lang=en&fmt=json';
+
+    const data  = await httpsGetJson(url);
+    const games = data?.SiteKit?.Scorebar || [];
+    const matches = games
+        .filter(g => String(g.HomeID) === String(teamId) || String(g.VisitorID) === String(teamId))
+        .filter(g => classifyHockeyTechStatus(g).state === 'preview')
+        .sort((a, b) => new Date(a.GameDateISO8601 || a.Date) - new Date(b.GameDateISO8601 || b.Date));
+
+    if (!matches.length) { log(league.toUpperCase() + ' API: no upcoming games in next 21 days for', teamId); return null; }
+
+    const g         = matches[0];
+    const awayId    = String(g.VisitorID);
+    const homeId    = String(g.HomeID);
+    const awayAbbr  = g.VisitorCode || teamAbbr(league, awayId);
+    const homeAbbr  = g.HomeCode    || teamAbbr(league, homeId);
+    const matchup   = awayAbbr + ' @ ' + homeAbbr;
+    const link      = 'https://lscluster.hockeytech.com/game_reports/official-game-report.php' +
+                       '?client_code=' + conf.client_code + '&game_id=' + g.ID + '&lang_id=1';
+    const startISO  = g.GameDateISO8601 || g.Date;
+    const dateLabel = new Date(startISO).toLocaleDateString([], { month: 'numeric', day: 'numeric' });
+
+    return { state: 'nextgame', matchup, dateLabel, time: g.ScheduledFormattedTime || fmtTime(startISO), awayId, homeId, awayAbbr, homeAbbr, link };
 }
 
 // Picks the single most relevant game for this team out of the ±3 day window:
@@ -682,6 +773,94 @@ function parseHockeyTechGame(g, league) {
                      : pLabel + ' ' + (g.GameClock || '');
 
     return { state: 'live', matchup, awayId, homeId, awayAbbr, homeAbbr, awayGoals, homeGoals, period: parseInt(g.Period, 10) || 1, periodStr, link };
+}
+
+// ── Live team lists (for the property inspector's search/browse UI) ───────────
+// The hardcoded TEAMS map above still drives colors and is the PI's offline
+// fallback, but the actual id/name/division list is refreshed from each
+// league's own API on request so AHL/ECHL expansion teams and realignments
+// show up without a plugin update. Cached in memory per plugin process.
+const TEAM_LIST_CACHE = {}; // league -> { fetchedAt, teams: [{value, abbr, name, division}] }
+const TEAM_LIST_TTL   = 24 * 60 * 60 * 1000; // 24h
+
+async function getLiveTeamList(league) {
+    const cached = TEAM_LIST_CACHE[league];
+    if (cached && (Date.now() - cached.fetchedAt) < TEAM_LIST_TTL) return cached.teams;
+
+    try {
+        const teams = league === 'nhl' ? await fetchNhlTeamList() : await fetchHockeyTechTeamList(league);
+        if (teams && teams.length) {
+            TEAM_LIST_CACHE[league] = { fetchedAt: Date.now(), teams };
+            return teams;
+        }
+        throw new Error('empty team list');
+    } catch (e) {
+        log('getLiveTeamList(' + league + ') failed, ' + (cached ? 'serving stale cache' : 'no cache available') + ':', e.message);
+        return cached ? cached.teams : null;
+    }
+}
+
+async function fetchNhlTeamList() {
+    const data = await httpsGetJson('https://api-web.nhle.com/v1/standings/now');
+    return (data?.standings || [])
+        .map(t => ({
+            value: t.teamAbbrev?.default,
+            abbr: t.teamAbbrev?.default,
+            name: t.teamName?.default,
+            division: t.divisionName,
+        }))
+        .filter(t => t.value && t.name)
+        .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// HockeyTech requires a season_id per request rather than a "current" keyword —
+// look it up from the league's own seasons list instead of hardcoding one, so
+// this keeps working across season rollovers without a plugin update.
+async function fetchHockeyTechCurrentSeasonId(league) {
+    const conf = HOCKEYTECH[league];
+    const url  = 'https://lscluster.hockeytech.com/feed/index.php?feed=modulekit&view=seasons' +
+        '&key=' + conf.key + '&client_code=' + conf.client_code + '&site_id=' + conf.site_id + '&lang=en&fmt=json';
+    const data    = await httpsGetJson(url);
+    const seasons = data?.SiteKit?.Seasons || [];
+    const regular = seasons
+        .filter(s => s.career === '1' && s.playoff === '0')
+        .sort((a, b) => new Date(b.start_date) - new Date(a.start_date));
+    if (!regular.length) throw new Error('no regular season found in seasons list');
+    return regular[0].season_id;
+}
+
+async function fetchHockeyTechTeamList(league) {
+    const conf     = HOCKEYTECH[league];
+    const seasonId = await fetchHockeyTechCurrentSeasonId(league);
+    const url = 'https://lscluster.hockeytech.com/feed/index.php?feed=modulekit&view=teamsbyseason' +
+        '&season_id=' + seasonId + '&key=' + conf.key + '&client_code=' + conf.client_code +
+        '&site_id=' + conf.site_id + '&lang=en&fmt=json';
+    const data = await httpsGetJson(url);
+    return (data?.SiteKit?.Teamsbyseason || [])
+        .map(t => ({ value: String(t.id), abbr: t.code, name: t.name, division: t.division_short_name }))
+        .filter(t => t.value && t.abbr && t.name)
+        .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// Fetches all 3 leagues' live team lists (each independently — one league
+// failing doesn't block the others) and relays them to the property inspector
+// that asked for them.
+async function sendLiveTeams(context) {
+    const [nhl, ahl, echl] = await Promise.all([
+        getLiveTeamList('nhl').catch(e  => { log('nhl team list error:', e.message);  return null; }),
+        getLiveTeamList('ahl').catch(e  => { log('ahl team list error:', e.message);  return null; }),
+        getLiveTeamList('echl').catch(e => { log('echl team list error:', e.message); return null; }),
+    ]);
+
+    const teams = {};
+    if (nhl)  teams.nhl  = nhl;
+    if (ahl)  teams.ahl  = ahl;
+    if (echl) teams.echl = echl;
+
+    if (!Object.keys(teams).length) { log('sendLiveTeams: all 3 leagues failed, PI keeps its static fallback'); return; }
+
+    log('Sending live team data to PI:', Object.keys(teams).map(l => l + '=' + teams[l].length).join(', '));
+    ws.send(JSON.stringify({ event: 'sendToPropertyInspector', context, payload: { event: 'teamsData', teams } }));
 }
 
 function fmtTime(iso) {

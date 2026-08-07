@@ -342,11 +342,33 @@
     ];
 
     var LEAGUE_LABEL = { nhl: "NHL", ahl: "AHL", echl: "ECHL" };
+
+    // Preferred display order for known divisions. This is only for sorting —
+    // the actual team/division data below (and anything merged in later from
+    // the live API) is the source of truth, so a newly added or renamed
+    // division still shows up correctly, just appended alphabetically after
+    // the ones this plugin already knows how to order.
     var DIVISIONS = {
         nhl:  ["Atlantic", "Metropolitan", "Central", "Pacific"],
         ahl:  ["Atlantic", "Central", "North", "Pacific"],
         echl: ["Central", "Mountain", "North", "South"],
     };
+
+    function getDivisionsForLeague(league) {
+        var seen = {}, divs = [];
+        TEAMS.forEach(function(t) {
+            if (t.league === league && !seen[t.division]) { seen[t.division] = true; divs.push(t.division); }
+        });
+        var preferred = DIVISIONS[league] || [];
+        divs.sort(function(a, b) {
+            var ia = preferred.indexOf(a), ib = preferred.indexOf(b);
+            if (ia === -1 && ib === -1) return a.localeCompare(b);
+            if (ia === -1) return 1;
+            if (ib === -1) return -1;
+            return ia - ib;
+        });
+        return divs;
+    }
 
     // ── State ─────────────────────────────────────────────────────────────────
     var websocket     = null;
@@ -442,7 +464,7 @@
     function renderDivisionSelect() {
         var league  = document.getElementById('leagueSelect').value;
         var divSel  = document.getElementById('divSelect');
-        var divs    = DIVISIONS[league] || [];
+        var divs    = getDivisionsForLeague(league);
 
         divSel.innerHTML = '<option value="">All Divisions</option>';
         divs.forEach(function(d) {
@@ -532,6 +554,36 @@
         websocket.send(JSON.stringify({ event: 'sendToPlugin', context: uuid, action: actionUUID, payload: { event: 'settingsChanged', settings: payload } }));
     }
 
+    // ── Live team data ────────────────────────────────────────────────────────
+    // The hardcoded TEAMS array above is the offline/first-paint fallback so
+    // search and browse work instantly. plugin.js has real network access (no
+    // browser CORS restrictions), so it fetches each league's current team
+    // list on request and pushes it back here — this replaces the entries for
+    // any league that responded, leaving the others on the static fallback.
+    function mergeLiveTeams(liveTeams) {
+        var leagues = ['nhl', 'ahl', 'echl'];
+        var updated = [];
+        leagues.forEach(function(league) {
+            if (!liveTeams[league] || !liveTeams[league].length) return;
+            updated.push(league);
+            TEAMS = TEAMS.filter(function(t) { return t.league !== league; }).concat(
+                liveTeams[league].map(function(t) {
+                    return { value: t.value, abbr: t.abbr, name: t.name, league: league, division: t.division };
+                })
+            );
+        });
+        if (!updated.length) return;
+
+        // Re-render whatever's currently on screen so changes show up immediately
+        renderDivisionSelect();
+        var currentDiv = document.getElementById('divSelect').value;
+        if (currentDiv && getDivisionsForLeague(document.getElementById('leagueSelect').value).indexOf(currentDiv) === -1) {
+            document.getElementById('divSelect').value = '';
+        }
+        renderTeamSelect();
+        if (searchBox.value.trim()) showAutocomplete();
+    }
+
     // ── Dropdown change handlers ───────────────────────────────────────────────
     document.getElementById('leagueSelect').addEventListener('change', function() {
         savedTeamId = null;
@@ -576,6 +628,7 @@
         websocket.onopen = function() {
             websocket.send(JSON.stringify({ event: registerEvent, uuid: propertyInspectorUUID }));
             websocket.send(JSON.stringify({ event: 'getSettings', context: propertyInspectorUUID }));
+            websocket.send(JSON.stringify({ event: 'sendToPlugin', context: propertyInspectorUUID, action: actionUUID, payload: { event: 'requestTeams' } }));
         };
 
         websocket.onmessage = function(evt) {
@@ -583,6 +636,11 @@
                 var data = JSON.parse(evt.data);
                 if (data.event === 'didReceiveSettings') {
                     applySettings(data.payload.settings);
+                } else if (data.event === 'sendToPropertyInspector' && data.payload && data.payload.event === 'teamsData') {
+                    mergeLiveTeams(data.payload.teams);
+                    // A live list may have arrived after the saved-settings sync above
+                    // already ran off the static fallback — re-sync now that it's current.
+                    if (savedTeamId) applySettings({ league: savedLeague, teamId: savedTeamId });
                 }
             } catch(e) {}
         };
