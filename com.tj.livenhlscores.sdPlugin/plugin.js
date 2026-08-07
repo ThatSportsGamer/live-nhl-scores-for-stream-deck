@@ -494,16 +494,21 @@ function fetchGame(league, teamId) {
     return fetchNhlGame(teamId);
 }
 
+// "Today", with a 2am local rollover so a late-running game doesn't drop off
+// the button at midnight. Shared by the NHL date-scoped fetch and the
+// HockeyTech preview/next-game classifier below.
+function todayDateStr() {
+    const now = new Date();
+    if (now.getHours() < 2) now.setDate(now.getDate() - 1);
+    return now.getFullYear() + '-' +
+           String(now.getMonth() + 1).padStart(2, '0') + '-' +
+           String(now.getDate()).padStart(2, '0');
+}
+
 // ── NHL API ───────────────────────────────────────────────────────────────────
 function fetchNhlGame(teamAbbrVal) {
     return new Promise((resolve, reject) => {
-        const now = new Date();
-        // Don't roll to the next day's schedule until 2am — covers late-running games
-        if (now.getHours() < 2) now.setDate(now.getDate() - 1);
-        const date = now.getFullYear() + '-' +
-                     String(now.getMonth() + 1).padStart(2, '0') + '-' +
-                     String(now.getDate()).padStart(2, '0');
-        const url = 'https://api-web.nhle.com/v1/score/' + date;
+        const url = 'https://api-web.nhle.com/v1/score/' + todayDateStr();
 
         const req = https.get(url, { headers: { 'User-Agent': 'StreamDeckHockeyScores/1.0' } }, res => {
             let body = '';
@@ -673,7 +678,7 @@ async function fetchHockeyTechNextGame(league, teamId) {
     const games = data?.SiteKit?.Scorebar || [];
     const matches = games
         .filter(g => String(g.HomeID) === String(teamId) || String(g.VisitorID) === String(teamId))
-        .filter(g => classifyHockeyTechStatus(g).state === 'preview')
+        .filter(g => { const s = classifyHockeyTechStatus(g).state; return s === 'preview' || s === 'nextgame'; })
         .sort((a, b) => new Date(a.GameDateISO8601 || a.Date) - new Date(b.GameDateISO8601 || b.Date));
 
     if (!matches.length) { log(league.toUpperCase() + ' API: no upcoming games in next 21 days for', teamId); return null; }
@@ -724,11 +729,18 @@ function parseHockeyTechScores(data, league, teamId) {
 // The HockeyTech scorebar feed doesn't document numeric GameStatus codes, so
 // state is derived from the human-readable GameStatusString(Long) fields plus
 // the scheduled start time — the same signals the AHL/ECHL sites' own scoreboard
-// widgets read. NOTE: written and tested against off-season data (finals only);
-// worth spot-checking once AHL/ECHL preseason games are live in October.
+// widgets read.
+//
+// The numberofdaysback/numberofdaysahead window on the scorebar request (see
+// fetchHockeyTechGame) turned out not to be a hard bound — during the
+// off-season the feed returns the next game on the schedule regardless of how
+// far outside that window it actually is (confirmed: a ±3 day request
+// returned a game 7+ weeks out). So "upcoming" alone isn't enough to call
+// something a same-day preview; only treat it as 'preview' if the game's own
+// Date actually matches today (with the same 2am rollover as the NHL side),
+// otherwise it's 'nextgame' and needs a date shown, not just a time.
 function classifyHockeyTechStatus(g) {
-    const str  = (g.GameStatusString || '').toLowerCase();
-    const long = (g.GameStatusStringLong || '').toLowerCase();
+    const str = (g.GameStatusString || '').toLowerCase();
 
     if (str.includes('ppd') || str.includes('postpon') || str.includes('cancel')) {
         return { state: 'ppd', rank: 1 };
@@ -736,7 +748,10 @@ function classifyHockeyTechStatus(g) {
     if (str.includes('final')) return { state: 'final', rank: 1 };
 
     const startMs = new Date(g.GameDateISO8601 || g.Date).getTime();
-    if (Number.isFinite(startMs) && Date.now() < startMs) return { state: 'preview', rank: 2 };
+    if (Number.isFinite(startMs) && Date.now() < startMs) {
+        const isToday = (g.Date || '').slice(0, 10) === todayDateStr();
+        return isToday ? { state: 'preview', rank: 2 } : { state: 'nextgame', rank: 2 };
+    }
 
     return { state: 'live', rank: 3 };
 }
@@ -752,8 +767,15 @@ function parseHockeyTechGame(g, league) {
 
     const status = classifyHockeyTechStatus(g);
 
-    if (status.state === 'ppd')     return { state: 'ppd', matchup, awayId, homeId, awayAbbr, homeAbbr, link };
-    if (status.state === 'preview') return { state: 'preview', matchup, time: g.ScheduledFormattedTime || fmtTime(g.GameDateISO8601), awayId, homeId, awayAbbr, homeAbbr, link };
+    if (status.state === 'ppd') return { state: 'ppd', matchup, awayId, homeId, awayAbbr, homeAbbr, link };
+
+    if (status.state === 'preview' || status.state === 'nextgame') {
+        const startISO = g.GameDateISO8601 || g.Date;
+        const time     = g.ScheduledFormattedTime || fmtTime(startISO);
+        if (status.state === 'preview') return { state: 'preview', matchup, time, awayId, homeId, awayAbbr, homeAbbr, link };
+        const dateLabel = new Date(startISO).toLocaleDateString([], { month: 'numeric', day: 'numeric' });
+        return { state: 'nextgame', matchup, dateLabel, time, awayId, homeId, awayAbbr, homeAbbr, link };
+    }
 
     const awayGoals = parseInt(g.VisitorGoals, 10) || 0;
     const homeGoals = parseInt(g.HomeGoals, 10)    || 0;

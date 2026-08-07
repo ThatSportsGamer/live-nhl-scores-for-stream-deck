@@ -2,7 +2,7 @@
 
 A Stream Deck plugin that shows live hockey scores directly on your buttons — **NHL, AHL, and ECHL**. Each button tracks one team and updates automatically every 30 seconds.
 
-![Live NHL Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.1.1-green)
+![Live NHL Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.1.2-green)
 
 ---
 
@@ -22,6 +22,9 @@ A Stream Deck plugin that shows live hockey scores directly on your buttons — 
 ---
 
 ## Recent Updates
+
+**v1.1.2.0**
+- Fixed AHL/ECHL buttons showing a bare time (looking like tonight's game) instead of the Next Game date when the actual game was weeks out — the HockeyTech feed ignores its own day-window request during the off-season and returns the next game regardless of distance, which the date logic wasn't accounting for
 
 **v1.1.1.0**
 - Off days now show your team's next scheduled game (matchup, date, and time) instead of a dead-end "No Game" — looks ahead across the whole off-season if needed, same approach as the MLB/MiLB plugins
