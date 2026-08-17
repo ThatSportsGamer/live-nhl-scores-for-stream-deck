@@ -171,6 +171,69 @@
         }
 
         .info-box strong { color: var(--text); }
+
+        /* ── Background color ── */
+        .checkbox-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .checkbox-row input[type="checkbox"] {
+            width: 14px;
+            height: 14px;
+            accent-color: var(--accent-hi);
+            cursor: pointer;
+        }
+
+        .checkbox-row label {
+            margin: 0;
+            text-transform: none;
+            letter-spacing: normal;
+            font-size: 12px;
+            color: var(--text);
+            cursor: pointer;
+        }
+
+        .bg-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 8px;
+        }
+
+        .bg-controls.disabled { opacity: .4; pointer-events: none; }
+
+        input[type="color"] {
+            width: 34px;
+            height: 28px;
+            padding: 0;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--surface);
+            cursor: pointer;
+        }
+
+        input[type="range"] {
+            flex: 1;
+            accent-color: var(--accent-hi);
+            cursor: pointer;
+        }
+
+        .opacity-value {
+            width: 34px;
+            text-align: right;
+            font-size: 11px;
+            color: #aaa;
+        }
+
+        .bg-hint {
+            margin-top: 6px;
+            font-size: 10.5px;
+            color: #777;
+            line-height: 1.4;
+        }
     </style>
 </head>
 <body>
@@ -214,6 +277,20 @@
 
 <div class="selected-team" id="selectedTeamInfo">
     Tracking: <span id="selectedTeamName"></span>
+</div>
+
+<div class="field" style="margin-top: 16px;">
+    <label>Key Background</label>
+    <div class="checkbox-row">
+        <input type="checkbox" id="bgEnabled"/>
+        <label for="bgEnabled">Use a custom background color</label>
+    </div>
+    <div class="bg-controls disabled" id="bgControls">
+        <input type="color" id="bgColorInput" value="#000000"/>
+        <input type="range" id="bgOpacityInput" min="10" max="100" value="100"/>
+        <span class="opacity-value" id="bgOpacityValue">100%</span>
+    </div>
+    <div class="bg-hint">Score and status text is white (or your team's color) — lighter or brighter backgrounds can make it harder to read.</div>
 </div>
 
 <div class="info-box">
@@ -377,6 +454,12 @@
     var actionUUID    = null;
     var savedTeamId   = null;
     var savedLeague   = "nhl";
+    var savedTeamAbbr = null;
+    var savedTeamName = null;
+
+    // Current background settings — kept separate from the team fields so
+    // changing the team doesn't clobber the background color (and vice versa).
+    var currentSettings = { bgColor: null, bgOpacity: 100 };
 
     // ── Autocomplete (searches every league) ─────────────────────────────────
     var acList      = document.getElementById('autocompleteList');
@@ -502,8 +585,10 @@
 
     // ── Shared selection handler ──────────────────────────────────────────────
     function selectTeam(t) {
-        savedTeamId = t.value;
-        savedLeague = t.league;
+        savedTeamId   = t.value;
+        savedLeague   = t.league;
+        savedTeamAbbr = t.abbr;
+        savedTeamName = t.name;
 
         searchBox.value = t.name;
         hideAutocomplete();
@@ -515,7 +600,7 @@
         document.getElementById('teamSelect').value = t.value;
 
         showSelectedTeamBanner(t.name, t.league);
-        saveSettings(t.league, t.value, t.abbr, t.name);
+        saveSettings();
     }
 
     function showSelectedTeamBanner(name, league) {
@@ -531,28 +616,80 @@
 
     // ── Settings ──────────────────────────────────────────────────────────────
     function applySettings(settings) {
-        if (!settings || !settings.teamId) return;
-        savedTeamId = settings.teamId;
-        savedLeague = settings.league || 'nhl';
+        if (!settings) return;
 
-        var team = TEAMS.find(function(t) { return t.value === settings.teamId && t.league === savedLeague; });
-        if (team) {
-            searchBox.value = team.name;
-            document.getElementById('leagueSelect').value = team.league;
-            renderDivisionSelect();
-            document.getElementById('divSelect').value = team.division;
-            renderTeamSelect();
-            document.getElementById('teamSelect').value = team.value;
-            showSelectedTeamBanner(team.name, team.league);
+        currentSettings.bgColor   = settings.bgColor    || null;
+        currentSettings.bgOpacity = settings.bgOpacity != null ? settings.bgOpacity : 100;
+
+        if (settings.teamId) {
+            savedTeamId   = settings.teamId;
+            savedLeague   = settings.league || 'nhl';
+            savedTeamAbbr = settings.teamAbbr || null;
+            savedTeamName = settings.teamName || null;
+
+            var team = TEAMS.find(function(t) { return t.value === settings.teamId && t.league === savedLeague; });
+            if (team) {
+                searchBox.value = team.name;
+                document.getElementById('leagueSelect').value = team.league;
+                renderDivisionSelect();
+                document.getElementById('divSelect').value = team.division;
+                renderTeamSelect();
+                document.getElementById('teamSelect').value = team.value;
+                showSelectedTeamBanner(team.name, team.league);
+            }
         }
+
+        var bgEnabled      = document.getElementById('bgEnabled');
+        var bgControls      = document.getElementById('bgControls');
+        var bgColor         = document.getElementById('bgColorInput');
+        var bgOpacity        = document.getElementById('bgOpacityInput');
+        var bgOpacityLabel  = document.getElementById('bgOpacityValue');
+
+        bgEnabled.checked = !!currentSettings.bgColor;
+        bgColor.value     = currentSettings.bgColor || '#000000';
+        bgOpacity.value   = currentSettings.bgOpacity;
+        bgOpacityLabel.textContent = currentSettings.bgOpacity + '%';
+        bgControls.classList.toggle('disabled', !bgEnabled.checked);
     }
 
-    function saveSettings(league, teamId, teamAbbr, teamName) {
-        if (!websocket || !teamId) return;
-        var payload = { league: league, teamId: teamId, teamAbbr: teamAbbr, teamName: teamName };
+    function saveSettings() {
+        if (!websocket) return;
+        var payload = {
+            league:    savedLeague,
+            teamId:    savedTeamId,
+            teamAbbr:  savedTeamAbbr,
+            teamName:  savedTeamName,
+            bgColor:   currentSettings.bgColor,
+            bgOpacity: currentSettings.bgOpacity
+        };
         websocket.send(JSON.stringify({ event: 'setSettings',  context: uuid,        payload: payload }));
         websocket.send(JSON.stringify({ event: 'sendToPlugin', context: uuid, action: actionUUID, payload: { event: 'settingsChanged', settings: payload } }));
     }
+
+    // ── Background color controls ─────────────────────────────────────────────
+    var bgEnabledEl      = document.getElementById('bgEnabled');
+    var bgControlsEl      = document.getElementById('bgControls');
+    var bgColorInputEl    = document.getElementById('bgColorInput');
+    var bgOpacityInputEl  = document.getElementById('bgOpacityInput');
+    var bgOpacityValueEl  = document.getElementById('bgOpacityValue');
+
+    bgEnabledEl.addEventListener('change', function() {
+        bgControlsEl.classList.toggle('disabled', !bgEnabledEl.checked);
+        currentSettings.bgColor = bgEnabledEl.checked ? bgColorInputEl.value : null;
+        saveSettings();
+    });
+
+    bgColorInputEl.addEventListener('input', function() {
+        if (!bgEnabledEl.checked) return;
+        currentSettings.bgColor = bgColorInputEl.value;
+        saveSettings();
+    });
+
+    bgOpacityInputEl.addEventListener('input', function() {
+        bgOpacityValueEl.textContent = bgOpacityInputEl.value + '%';
+        currentSettings.bgOpacity = parseInt(bgOpacityInputEl.value, 10);
+        if (bgEnabledEl.checked) saveSettings();
+    });
 
     // ── Live team data ────────────────────────────────────────────────────────
     // The hardcoded TEAMS array above is the offline/first-paint fallback so
@@ -607,11 +744,13 @@
         var abbr   = opt.getAttribute('data-abbr');
         var league = opt.getAttribute('data-league');
         var name   = opt.text;
-        savedTeamId = sel.value;
-        savedLeague = league;
+        savedTeamId   = sel.value;
+        savedLeague   = league;
+        savedTeamAbbr = abbr;
+        savedTeamName = name;
         searchBox.value = name;
         showSelectedTeamBanner(name, league);
-        saveSettings(league, sel.value, abbr, name);
+        saveSettings();
     });
 
     // ── Stream Deck WebSocket ─────────────────────────────────────────────────
