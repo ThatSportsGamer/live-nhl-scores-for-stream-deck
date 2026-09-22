@@ -261,13 +261,17 @@ function scheduleFallbackUrl(league) {
     return 'https://www.nhl.com/schedule';
 }
 
-// A "Custom Link" setting always wins when configured with a valid URL —
-// otherwise falls back to the normal per-game link (Gamecenter / AHL-ECHL
-// game report), or the league schedule page if there's no game at all.
+// Same pattern as the MiLB plugin's Custom Link option: Gamecenter (or the
+// AHL/ECHL game report) until the game actually starts, then the user's own
+// link — e.g. a regional sports network's live-game page. Falls back to the
+// normal link if no custom URL is configured yet, or if the game hasn't
+// started, so the button never opens a blank tab or jumps the gun on a
+// stream that isn't live yet.
 function resolveLink(cfg, game) {
     if (cfg.linkType === 'custom' && cfg.customLink) {
         const trimmed = String(cfg.customLink).trim();
-        if (/^https?:\/\//i.test(trimmed)) return trimmed;
+        const gameStarted = game && (game.state === 'live' || game.state === 'final');
+        if (gameStarted && /^https?:\/\//i.test(trimmed)) return trimmed;
     }
     if (game && game.link) return game.link;
     return scheduleFallbackUrl(cfg.league);
