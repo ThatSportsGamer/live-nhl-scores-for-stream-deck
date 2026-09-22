@@ -231,15 +231,12 @@ function handleEvent({ event, context, payload }) {
             break;
 
         case 'keyUp': {
+            const cfg  = instances.get(context) || {};
             const game = currentGame.get(context);
-            if (game && game.link) {
-                log('keyUp — opening URL:', game.link);
-                ws.send(JSON.stringify({ event: 'openUrl', payload: { url: game.link } }));
-            } else {
-                const cfg = instances.get(context) || {};
-                const fallback = scheduleFallbackUrl(cfg.league);
-                log('keyUp — no game, opening fallback:', fallback);
-                if (fallback) ws.send(JSON.stringify({ event: 'openUrl', payload: { url: fallback } }));
+            const url  = resolveLink(cfg, game);
+            log('keyUp — opening URL:', url);
+            if (url) ws.send(JSON.stringify({ event: 'openUrl', payload: { url } }));
+            if (!(game && game.link)) {
                 lastRender.delete(context);
                 refreshButton(context);
             }
@@ -262,6 +259,18 @@ function scheduleFallbackUrl(league) {
     if (league === 'ahl')  return 'https://theahl.com/stats/schedule';
     if (league === 'echl') return 'https://echl.com/schedule';
     return 'https://www.nhl.com/schedule';
+}
+
+// A "Custom Link" setting always wins when configured with a valid URL —
+// otherwise falls back to the normal per-game link (Gamecenter / AHL-ECHL
+// game report), or the league schedule page if there's no game at all.
+function resolveLink(cfg, game) {
+    if (cfg.linkType === 'custom' && cfg.customLink) {
+        const trimmed = String(cfg.customLink).trim();
+        if (/^https?:\/\//i.test(trimmed)) return trimmed;
+    }
+    if (game && game.link) return game.link;
+    return scheduleFallbackUrl(cfg.league);
 }
 
 // ── Refresh one button ────────────────────────────────────────────────────────

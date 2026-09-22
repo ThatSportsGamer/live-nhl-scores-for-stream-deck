@@ -293,6 +293,19 @@
     <div class="bg-hint">Score and status text is white (or your team's color) — lighter or brighter backgrounds can make it harder to read.</div>
 </div>
 
+<div class="field" style="margin-top: 16px;">
+    <label for="linkType">Button Press Opens</label>
+    <select id="linkType">
+        <option value="gamecenter">NHL.com Gamecenter</option>
+        <option value="custom">Custom Link</option>
+    </select>
+</div>
+
+<div class="field" id="customLinkField" style="display: none;">
+    <label for="customLinkInput">Custom URL</label>
+    <input type="text" id="customLinkInput" placeholder="https://…" autocomplete="off"/>
+</div>
+
 <div class="info-box">
     <strong>How it works:</strong><br>
     • Scores refresh automatically every <strong>30 seconds</strong><br>
@@ -459,7 +472,7 @@
 
     // Current background settings — kept separate from the team fields so
     // changing the team doesn't clobber the background color (and vice versa).
-    var currentSettings = { bgColor: null, bgOpacity: 100 };
+    var currentSettings = { bgColor: null, bgOpacity: 100, linkType: 'gamecenter', customLink: '' };
 
     // NHL team abbr → AHL/ECHL affiliate abbr. Hand-maintained — unlike the
     // MiLB plugin's live parentOrgId (MLB Stats API exposes the parent org
@@ -695,6 +708,8 @@
 
         currentSettings.bgColor   = settings.bgColor    || null;
         currentSettings.bgOpacity = settings.bgOpacity != null ? settings.bgOpacity : 100;
+        currentSettings.linkType  = settings.linkType  || 'gamecenter';
+        currentSettings.customLink = settings.customLink || '';
 
         if (settings.teamId) {
             savedTeamId   = settings.teamId;
@@ -725,17 +740,23 @@
         bgOpacity.value   = currentSettings.bgOpacity;
         bgOpacityLabel.textContent = currentSettings.bgOpacity + '%';
         bgControls.classList.toggle('disabled', !bgEnabled.checked);
+
+        document.getElementById('linkType').value = currentSettings.linkType;
+        document.getElementById('customLinkInput').value = currentSettings.customLink;
+        document.getElementById('customLinkField').style.display = currentSettings.linkType === 'custom' ? 'block' : 'none';
     }
 
     function saveSettings() {
         if (!websocket) return;
         var payload = {
-            league:    savedLeague,
-            teamId:    savedTeamId,
-            teamAbbr:  savedTeamAbbr,
-            teamName:  savedTeamName,
-            bgColor:   currentSettings.bgColor,
-            bgOpacity: currentSettings.bgOpacity
+            league:     savedLeague,
+            teamId:     savedTeamId,
+            teamAbbr:   savedTeamAbbr,
+            teamName:   savedTeamName,
+            bgColor:    currentSettings.bgColor,
+            bgOpacity:  currentSettings.bgOpacity,
+            linkType:   currentSettings.linkType,
+            customLink: currentSettings.customLink
         };
         websocket.send(JSON.stringify({ event: 'setSettings',  context: uuid,        payload: payload }));
         websocket.send(JSON.stringify({ event: 'sendToPlugin', context: uuid, action: actionUUID, payload: { event: 'settingsChanged', settings: payload } }));
@@ -764,6 +785,22 @@
         bgOpacityValueEl.textContent = bgOpacityInputEl.value + '%';
         currentSettings.bgOpacity = parseInt(bgOpacityInputEl.value, 10);
         if (bgEnabledEl.checked) saveSettings();
+    });
+
+    // ── Button-press link controls ────────────────────────────────────────────
+    var linkTypeEl      = document.getElementById('linkType');
+    var customLinkField = document.getElementById('customLinkField');
+    var customLinkEl     = document.getElementById('customLinkInput');
+
+    linkTypeEl.addEventListener('change', function() {
+        currentSettings.linkType = linkTypeEl.value;
+        customLinkField.style.display = linkTypeEl.value === 'custom' ? 'block' : 'none';
+        saveSettings();
+    });
+
+    customLinkEl.addEventListener('input', function() {
+        currentSettings.customLink = customLinkEl.value;
+        saveSettings();
     });
 
     // ── Live team data ────────────────────────────────────────────────────────

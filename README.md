@@ -2,7 +2,7 @@
 
 A Stream Deck plugin that shows live hockey scores directly on your buttons — **NHL, AHL, and ECHL**. Each button tracks one team and updates automatically every 30 seconds.
 
-![Live NHL Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.1.6-green)
+![Live NHL Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.1.7-green)
 
 ---
 
@@ -16,6 +16,7 @@ A Stream Deck plugin that shows live hockey scores directly on your buttons — 
 - **Final scores** — shows the final score with a "Final", "Final/OT", or "Final/SO" label
 - **Score-change flash** — when a team scores, the button flashes in that team's primary color
 - **Custom key background** — pick any color and opacity for the button background in settings
+- **Custom link** — send button presses to any URL you choose instead of Gamecenter
 - **Browser shortcut** — press any button to open that game's recap or gamecenter
 - **No-flicker updates** — buttons only redraw when the display actually changes
 - **Multi-button support** — add as many team buttons as you want, each refreshes independently
@@ -23,6 +24,9 @@ A Stream Deck plugin that shows live hockey scores directly on your buttons — 
 ---
 
 ## Recent Updates
+
+**v1.1.7.0**
+- Added a "Button Press Opens" setting per button — NHL.com Gamecenter (default) or a Custom Link you type in, same idea as the MLB plugin's link option
 
 **v1.1.6.0**
 - Searching for an NHL team now also surfaces its AHL and ECHL affiliates, in NHL → AHL → ECHL order — same idea as the MiLB plugin's affiliate search. Affiliations are hand-maintained since the AHL/ECHL feed doesn't expose parent-org data; worth a check each September if a team's system changes
