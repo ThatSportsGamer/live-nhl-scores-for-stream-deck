@@ -461,22 +461,101 @@
     // changing the team doesn't clobber the background color (and vice versa).
     var currentSettings = { bgColor: null, bgOpacity: 100 };
 
+    // NHL team abbr → AHL/ECHL affiliate abbr. Hand-maintained — unlike the
+    // MiLB plugin's live parentOrgId (MLB Stats API exposes the parent org
+    // right on each team), the HockeyTech feed AHL/ECHL run on doesn't expose
+    // any parent-club relationship, so there's no live field to read this
+    // from. Affiliations mostly change over the summer; worth checking against
+    // echl.com/teams/nhl-ahl-affiliations and theahl.com each September.
+    // null means that NHL team currently has no ECHL affiliate.
+    var AFFILIATES = {
+        ANA: { ahl: 'SD',  echl: 'TUL' },
+        BOS: { ahl: 'PRO', echl: 'MNE' },
+        BUF: { ahl: 'ROC', echl: null  },
+        CGY: { ahl: 'CGY', echl: 'RC'  },
+        CAR: { ahl: 'CHI', echl: 'GSO' },
+        CHI: { ahl: 'RFD', echl: 'IND' },
+        COL: { ahl: 'COL', echl: 'NM'  },
+        CBJ: { ahl: 'CLE', echl: 'WHL' },
+        DAL: { ahl: 'TEX', echl: 'IDH' },
+        DET: { ahl: 'GR',  echl: 'TOL' },
+        EDM: { ahl: 'BAK', echl: 'FW'  },
+        FLA: { ahl: 'CLT', echl: 'SAV' },
+        LAK: { ahl: 'ONT', echl: 'GVL' },
+        MIN: { ahl: 'IA',  echl: 'JAX' },
+        MTL: { ahl: 'LAV', echl: 'TR'  },
+        NSH: { ahl: 'MIL', echl: 'ATL' },
+        NJD: { ahl: 'UTC', echl: 'ADK' },
+        NYI: { ahl: 'HAM', echl: 'TRE' },
+        NYR: { ahl: 'HFD', echl: null  },
+        OTT: { ahl: 'BEL', echl: 'ALN' },
+        PHI: { ahl: 'LV',  echl: 'REA' },
+        PIT: { ahl: 'WBS', echl: 'FLA' },
+        SJS: { ahl: 'SJ',  echl: 'WIC' },
+        SEA: { ahl: 'CV',  echl: 'KC'  },
+        STL: { ahl: 'SPR', echl: 'WOR' },
+        TBL: { ahl: 'SYR', echl: 'ORL' },
+        TOR: { ahl: 'TOR', echl: 'CIN' },
+        UTA: { ahl: 'TUC', echl: null  },
+        VAN: { ahl: 'ABB', echl: 'KAL' },
+        VGK: { ahl: 'HSK', echl: 'TAH' },
+        WSH: { ahl: 'HER', echl: 'SC'  },
+        WPG: { ahl: 'MB',  echl: 'BLM' },
+    };
+
+    function findTeam(league, abbr) {
+        if (!abbr) return null;
+        return TEAMS.find(function(t) { return t.league === league && t.abbr === abbr; });
+    }
+
     // ── Autocomplete (searches every league) ─────────────────────────────────
     var acList      = document.getElementById('autocompleteList');
     var searchBox   = document.getElementById('searchBox');
     var activeIndex = -1;
 
+    // Matching an NHL team also pulls in its AHL and ECHL affiliates (via
+    // AFFILIATES above) right after it, in NHL → AHL → ECHL order — so
+    // searching "Rangers" surfaces Hartford Wolf Pack too, even though
+    // "Wolf Pack" shares no text with "Rangers". A team matched directly by
+    // the query (or already pulled in as someone else's affiliate) is never
+    // listed twice.
+    function getMatches(query) {
+        var q = query.toLowerCase().trim();
+        if (!q) return [];
+
+        var direct = TEAMS.filter(function(t) {
+            return t.name.toLowerCase().indexOf(q) !== -1 ||
+                   t.abbr.toLowerCase().indexOf(q) !== -1;
+        });
+
+        var seen = {};
+        var results = [];
+        function add(t) {
+            if (!t) return;
+            var key = t.league + ':' + t.value;
+            if (seen[key]) return;
+            seen[key] = true;
+            results.push(t);
+        }
+
+        direct.forEach(function(t) {
+            add(t);
+            if (t.league === 'nhl' && AFFILIATES[t.abbr]) {
+                add(findTeam('ahl',  AFFILIATES[t.abbr].ahl));
+                add(findTeam('echl', AFFILIATES[t.abbr].echl));
+            }
+        });
+
+        return results;
+    }
+
     function showAutocomplete() {
-        var query = searchBox.value.toLowerCase().trim();
         acList.innerHTML = '';
         activeIndex = -1;
 
-        if (!query) { acList.style.display = 'none'; return; }
+        if (!searchBox.value.trim()) { acList.style.display = 'none'; return; }
 
-        var matches = TEAMS.filter(function(t) {
-            return t.name.toLowerCase().indexOf(query) !== -1 ||
-                   t.abbr.toLowerCase().indexOf(query) !== -1;
-        });
+        var matches = getMatches(searchBox.value);
 
         if (!matches.length) { acList.style.display = 'none'; return; }
 
@@ -527,12 +606,8 @@
             var active = acList.querySelector('.ac-item.active');
             if (active) {
                 e.preventDefault();
-                var idx = Array.prototype.indexOf.call(acList.querySelectorAll('.ac-item'), active);
-                var query = searchBox.value.toLowerCase().trim();
-                var matches = TEAMS.filter(function(t) {
-                    return t.name.toLowerCase().indexOf(query) !== -1 ||
-                           t.abbr.toLowerCase().indexOf(query) !== -1;
-                });
+                var idx     = Array.prototype.indexOf.call(acList.querySelectorAll('.ac-item'), active);
+                var matches = getMatches(searchBox.value);
                 if (matches[idx]) selectTeam(matches[idx]);
             }
         }
