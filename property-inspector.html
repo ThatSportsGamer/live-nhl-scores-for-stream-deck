@@ -718,7 +718,11 @@
             document.getElementById('divSelect').value = '';
         }
         renderTeamSelect();
-        if (searchBox.value.trim()) showAutocomplete();
+        // Only reopen the dropdown if the user is actively typing in the search
+        // box — otherwise this refresh (which also runs right after settings
+        // load, to pick up any newly-live team list) makes an already-selected
+        // team look like a live search in progress.
+        if (document.activeElement === searchBox && searchBox.value.trim()) showAutocomplete();
     }
 
     // ── Dropdown change handlers ───────────────────────────────────────────────
