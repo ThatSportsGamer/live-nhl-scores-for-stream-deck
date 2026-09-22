@@ -2,7 +2,7 @@
 
 A Stream Deck plugin that shows live hockey scores directly on your buttons — **NHL, AHL, and ECHL**. Each button tracks one team and updates automatically every 30 seconds.
 
-![Live NHL Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.1.8-green)
+![Live NHL Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.1.9-green)
 
 ---
 
@@ -24,6 +24,9 @@ A Stream Deck plugin that shows live hockey scores directly on your buttons — 
 ---
 
 ## Recent Updates
+
+**v1.1.9.0**
+- Reordered the settings panel — "Button Press Opens" now sits above "Key Background"
 
 **v1.1.8.0**
 - Custom Link now opens Gamecenter until the game actually starts, then switches to your link — matches the MiLB plugin's behavior, and added the same explanatory note in settings
