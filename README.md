@@ -2,7 +2,7 @@
 
 A Stream Deck plugin that shows live hockey scores directly on your buttons — **NHL, AHL, and ECHL**. Each button tracks one team and updates automatically every 30 seconds.
 
-![Live NHL Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.1.3-green)
+![Live NHL Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.1.4-green)
 
 ---
 
@@ -23,6 +23,9 @@ A Stream Deck plugin that shows live hockey scores directly on your buttons — 
 ---
 
 ## Recent Updates
+
+**v1.1.4.0**
+- Added the final marketplace/plugin icon — the goalie silhouette artwork with the "Live NHL Scores" wordmark, matching the CFB/NFL/MLB/MiLB plugins
 
 **v1.1.3.0**
 - Added a custom key background color option — pick any color and opacity in the settings panel to restyle the button background instead of the default black
