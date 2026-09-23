@@ -1,6 +1,6 @@
 # Live NHL Scores — Stream Deck Plugin
 
-A Stream Deck plugin that shows live hockey scores directly on your buttons — **NHL, AHL, and ECHL**. Each button tracks one team and updates automatically every 30 seconds.
+A Stream Deck plugin that shows live hockey scores directly on your keys — **NHL, AHL, and ECHL**. Each key tracks one team and updates automatically every 30 seconds.
 
 ![Live NHL Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.1.9-green)
 
@@ -14,25 +14,25 @@ A Stream Deck plugin that shows live hockey scores directly on your buttons — 
 - **Live scores** — shows away score, home score, and current period/time while a game is in progress
 - **Pre-game** — shows the matchup (e.g. `TOR @ BOS`) and scheduled start time
 - **Final scores** — shows the final score with a "Final", "Final/OT", or "Final/SO" label
-- **Score-change flash** — when a team scores, the button flashes in that team's primary color
-- **Custom key background** — pick any color and opacity for the button background in settings
-- **Custom link** — send button presses to any URL you choose instead of Gamecenter
-- **Browser shortcut** — press any button to open that game's recap or gamecenter
-- **No-flicker updates** — buttons only redraw when the display actually changes
-- **Multi-button support** — add as many team buttons as you want, each refreshes independently
+- **Score-change flash** — when a team scores, the key flashes in that team's primary color
+- **Custom key background** — pick any color and opacity for the key background in settings
+- **Custom link** — send key presses to any URL you choose instead of Gamecenter
+- **Browser shortcut** — press any key to open that game's recap or gamecenter
+- **No-flicker updates** — keys only redraw when the display actually changes
+- **Multi-key support** — add as many team keys as you want, each refreshes independently
 
 ---
 
 ## Recent Updates
 
 **v1.1.9.0**
-- Reordered the settings panel — "Button Press Opens" now sits above "Key Background"
+- Reordered the settings panel — "Key Press Opens" now sits above "Key Background"
 
 **v1.1.8.0**
 - Custom Link now opens Gamecenter until the game actually starts, then switches to your link — matches the MiLB plugin's behavior, and added the same explanatory note in settings
 
 **v1.1.7.0**
-- Added a "Button Press Opens" setting per button — NHL.com Gamecenter (default) or a Custom Link you type in, same idea as the MLB plugin's link option
+- Added a "Key Press Opens" setting per key — NHL.com Gamecenter (default) or a Custom Link you type in, same idea as the MLB plugin's link option
 
 **v1.1.6.0**
 - Searching for an NHL team now also surfaces its AHL and ECHL affiliates, in NHL → AHL → ECHL order — same idea as the MiLB plugin's affiliate search. Affiliations are hand-maintained since the AHL/ECHL feed doesn't expose parent-org data; worth a check each September if a team's system changes
@@ -44,10 +44,10 @@ A Stream Deck plugin that shows live hockey scores directly on your buttons — 
 - Added the final marketplace/plugin icon — the goalie silhouette artwork with the "Live NHL Scores" wordmark, matching the CFB/NFL/MLB/MiLB plugins
 
 **v1.1.3.0**
-- Added a custom key background color option — pick any color and opacity in the settings panel to restyle the button background instead of the default black
+- Added a custom key background color option — pick any color and opacity in the settings panel to restyle the key background instead of the default black
 
 **v1.1.2.0**
-- Fixed AHL/ECHL buttons showing a bare time (looking like tonight's game) instead of the Next Game date when the actual game was weeks out — the HockeyTech feed ignores its own day-window request during the off-season and returns the next game regardless of distance, which the date logic wasn't accounting for
+- Fixed AHL/ECHL keys showing a bare time (looking like tonight's game) instead of the Next Game date when the actual game was weeks out — the HockeyTech feed ignores its own day-window request during the off-season and returns the next game regardless of distance, which the date logic wasn't accounting for
 
 **v1.1.1.0**
 - Off days now show your team's next scheduled game (matchup, date, and time) instead of a dead-end "No Game" — looks ahead across the whole off-season if needed, same approach as the MLB/MiLB plugins
@@ -57,7 +57,7 @@ A Stream Deck plugin that shows live hockey scores directly on your buttons — 
 **v1.1.0.0**
 - Added AHL and ECHL support — 62 more teams alongside the NHL, sourced from the HockeyTech/LeagueStat feed used by theahl.com and echl.com
 - Rebuilt the settings panel with a search box (type a team or city name for instant results across all three leagues), a league selector, and a division-filtered team dropdown
-- Button link now opens the right destination per league — NHL Gamecenter, or the AHL/ECHL official game report
+- Key link now opens the right destination per league — NHL Gamecenter, or the AHL/ECHL official game report
 
 **v1.0.1.0**
 - Updated Utah's team name to Utah Mammoth
@@ -85,17 +85,17 @@ A Stream Deck plugin that shows live hockey scores directly on your buttons — 
 
 ## Setup
 
-1. Drag the **Live NHL Scores** action onto any button
+1. Drag the **Live NHL Scores** action onto any key
 2. In the settings panel on the right, either:
    - Type your team's name or city into the search box and pick it from the results, or
    - Choose a league (NHL / AHL / ECHL), optionally a division, then your team from the dropdown
-3. Press the button anytime to open that game's recap or gamecenter
+3. Press the key anytime to open that game's recap or gamecenter
 
-That's it. The button will load your team's game within a few seconds and refresh every 30 seconds from there.
+That's it. The key will load your team's game within a few seconds and refresh every 30 seconds from there.
 
 ---
 
-## What the Button Shows
+## What the Key Shows
 
 **Before the game:**
 ```
@@ -142,15 +142,15 @@ TOR @ BOS
 
 ## How It Works
 
-NHL scores come from the [NHL's free public API](https://api-web.nhle.com). AHL and ECHL scores come from the HockeyTech/LeagueStat feed at `lscluster.hockeytech.com` — the same backend that powers theahl.com and echl.com. Both are polled once every 30 seconds per button. No API key or account is required for either. The plugin is fully self-contained — it uses only Node.js built-in modules and requires no external dependencies.
+NHL scores come from the [NHL's free public API](https://api-web.nhle.com). AHL and ECHL scores come from the HockeyTech/LeagueStat feed at `lscluster.hockeytech.com` — the same backend that powers theahl.com and echl.com. Both are polled once every 30 seconds per key. No API key or account is required for either. The plugin is fully self-contained — it uses only Node.js built-in modules and requires no external dependencies.
 
-The schedule holds on the current day's games until 2 AM local time (NHL) or within a rolling multi-day window (AHL/ECHL), so late-running games and off days stay sensible on the button.
+The schedule holds on the current day's games until 2 AM local time (NHL) or within a rolling multi-day window (AHL/ECHL), so late-running games and off days stay sensible on the key.
 
 ---
 
 ## Uninstalling
 
-Open Stream Deck → Preferences → Plugins, select **Live NHL Scores**, and click the **−** button.
+Open Stream Deck → Preferences → Plugins, select **Live NHL Scores**, and click the **−** key.
 
 ---
 
