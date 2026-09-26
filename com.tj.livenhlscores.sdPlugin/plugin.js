@@ -257,9 +257,22 @@ function handleEvent({ event, context, payload }) {
     }
 }
 
-function scheduleFallbackUrl(league) {
+// Where a key press goes when there's no game to link to (in practice, only
+// the offseason — the rest of the year the key always shows the next game).
+// NHL teams open their own NHL.com schedule, matching how the NFL/CFB plugins
+// open the team's ESPN schedule. NHL.com team URLs use the nickname with the
+// spaces dropped (mapleleafs, goldenknights, bluejackets), except Utah, which
+// is /utah. AHL/ECHL team sites aren't consistent enough to build reliably,
+// so those stay on the league schedule.
+const NHL_SLUG_OVERRIDES = { UTA: 'utah' };
+function scheduleFallbackUrl(league, teamId) {
     if (league === 'ahl')  return 'https://theahl.com/stats/schedule';
     if (league === 'echl') return 'https://echl.com/schedule';
+    const team = teamId && TEAMS.nhl[teamId];
+    if (team) {
+        const slug = NHL_SLUG_OVERRIDES[teamId] || team.name.toLowerCase().replace(/[^a-z]/g, '');
+        return `https://www.nhl.com/${slug}/schedule`;
+    }
     return 'https://www.nhl.com/schedule';
 }
 
@@ -270,19 +283,32 @@ function scheduleFallbackUrl(league) {
 // back to the normal link if no custom URL is configured yet, or if the game
 // hasn't started, so the button never opens a blank tab or jumps the gun on a
 // stream that isn't live yet.
+// Tidies a user-typed Custom Link: trims whitespace and adds https:// when no
+// scheme was typed ("www.foxsports.com/live/sny" -> "https://www.foxsports.com/live/sny"),
+// since Stream Deck won't open a bare domain as a web page. Returns '' for
+// anything that can't be a web link (blank, or a non-http scheme like file:),
+// so callers fall back to the default link instead of opening nothing.
+function normalizeCustomUrl(raw) {
+    const s = String(raw || '').trim();
+    if (!s) return '';
+    if (/^https?:\/\//i.test(s)) return s;
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(s) || /^(javascript|data|file|vbscript|mailto):/i.test(s)) return '';
+    return 'https://' + s.replace(/^\/+/, '');
+}
+
 const CUSTOM_LINK_FINAL_GRACE_MS = 30 * 60 * 1000;
 function resolveLink(cfg, game, context) {
-    if (cfg.linkType === 'custom' && cfg.customLink) {
-        const trimmed = String(cfg.customLink).trim();
+    const customUrl = normalizeCustomUrl(cfg.customLink);
+    if (cfg.linkType === 'custom' && customUrl) {
         let useCustom = !!game && (game.state === 'live' || game.state === 'final');
         if (useCustom && game.state === 'final') {
             const finalAt = gameFinalAt.get(context);
             if (!finalAt || Date.now() - finalAt > CUSTOM_LINK_FINAL_GRACE_MS) useCustom = false;
         }
-        if (useCustom && /^https?:\/\//i.test(trimmed)) return trimmed;
+        if (useCustom) return customUrl;
     }
     if (game && game.link) return game.link;
-    return scheduleFallbackUrl(cfg.league);
+    return scheduleFallbackUrl(cfg.league || 'nhl', cfg.teamId);
 }
 
 // ── Refresh one button ────────────────────────────────────────────────────────
