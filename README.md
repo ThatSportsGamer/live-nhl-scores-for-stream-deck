@@ -1,5 +1,7 @@
 # Live NHL Scores — Stream Deck Plugin
 
+![Live NHL Scores in action](assets/LiveNHLScoresThumbnail.png)
+
 A Stream Deck plugin that shows live hockey scores directly on your keys — **NHL, AHL, and ECHL**. Each key tracks one team and updates automatically every 30 seconds.
 
 ![Live NHL Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.1.12-green)
