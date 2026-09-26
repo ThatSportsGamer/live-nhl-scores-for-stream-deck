@@ -3,28 +3,34 @@
     "CodePath": "plugin.js",
     "Description": "Shows live NHL, AHL, and ECHL scores on your Stream Deck. Each key tracks one team — see the current score, period, and game status at a glance.",
     "Name": "Live NHL Scores",
-    "UUID": "com.tj.livenhscores",
+    "UUID": "com.tj.livenhlscores",
     "Category": "Live Sports Scores",
     "URL": "https://github.com/ThatSportsGamer/live-nhl-scores-for-stream-deck",
     "Icon": "imgs/plugin-icon",
     "CategoryIcon": "imgs/category-icon",
-    "Version": "1.1.9.0",
+    "Version": "1.1.10.0",
     "SDKVersion": 3,
     "Software": {
         "MinimumVersion": "6.9"
     },
     "OS": [
-        { "Platform": "mac", "MinimumVersion": "10.15" },
-        { "Platform": "windows", "MinimumVersion": "10" }
+        {
+            "Platform": "mac",
+            "MinimumVersion": "10.15"
+        },
+        {
+            "Platform": "windows",
+            "MinimumVersion": "10"
+        }
     ],
     "Nodejs": {
         "Version": "20",
-        "Debug": "enabled"
+        "Debug": "disabled"
     },
     "Actions": [
         {
             "Name": "Live NHL Scores",
-            "UUID": "com.tj.livenhscores.score",
+            "UUID": "com.tj.livenhlscores.score",
             "Icon": "imgs/action-icon",
             "Tooltip": "Shows live score for your chosen NHL, AHL, or ECHL team. Updates every 30 seconds.",
             "PropertyInspectorPath": "property-inspector.html",

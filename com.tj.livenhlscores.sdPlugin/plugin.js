@@ -174,6 +174,7 @@ const refreshing    = new Set();
 const lastRender    = new Map();
 const currentGame   = new Map();
 const refreshTimers = new Map();
+const gameFinalAt   = new Map(); // context -> timestamp when live→final was detected (drives the Custom Link post-final grace window)
 
 // ── Connect to Stream Deck ────────────────────────────────────────────────────
 log('Connecting to Stream Deck on port', sdPort);
@@ -215,6 +216,7 @@ function handleEvent({ event, context, payload }) {
             prevState.delete(context);
             lastRender.delete(context);
             currentGame.delete(context);
+            gameFinalAt.delete(context);
             refreshing.delete(context);
             flashing.delete(context);
             if (refreshTimers.has(context)) {
@@ -233,7 +235,7 @@ function handleEvent({ event, context, payload }) {
         case 'keyUp': {
             const cfg  = instances.get(context) || {};
             const game = currentGame.get(context);
-            const url  = resolveLink(cfg, game);
+            const url  = resolveLink(cfg, game, context);
             log('keyUp — opening URL:', url);
             if (url) ws.send(JSON.stringify({ event: 'openUrl', payload: { url } }));
             if (!(game && game.link)) {
@@ -261,17 +263,23 @@ function scheduleFallbackUrl(league) {
     return 'https://www.nhl.com/schedule';
 }
 
-// Same pattern as the MiLB plugin's Custom Link option: Gamecenter (or the
-// AHL/ECHL game report) until the game actually starts, then the user's own
-// link — e.g. a regional sports network's live-game page. Falls back to the
-// normal link if no custom URL is configured yet, or if the game hasn't
-// started, so the button never opens a blank tab or jumps the gun on a
+// Same pattern as the MLB/MiLB/CFB plugins' Custom Link option: Gamecenter (or
+// the AHL/ECHL game report) until the game actually starts, then the user's own
+// link — e.g. a regional sports network's live-game page — through the final
+// and for 30 minutes after it, then back to Gamecenter for the recap. Falls
+// back to the normal link if no custom URL is configured yet, or if the game
+// hasn't started, so the button never opens a blank tab or jumps the gun on a
 // stream that isn't live yet.
-function resolveLink(cfg, game) {
+const CUSTOM_LINK_FINAL_GRACE_MS = 30 * 60 * 1000;
+function resolveLink(cfg, game, context) {
     if (cfg.linkType === 'custom' && cfg.customLink) {
         const trimmed = String(cfg.customLink).trim();
-        const gameStarted = game && (game.state === 'live' || game.state === 'final');
-        if (gameStarted && /^https?:\/\//i.test(trimmed)) return trimmed;
+        let useCustom = !!game && (game.state === 'live' || game.state === 'final');
+        if (useCustom && game.state === 'final') {
+            const finalAt = gameFinalAt.get(context);
+            if (!finalAt || Date.now() - finalAt > CUSTOM_LINK_FINAL_GRACE_MS) useCustom = false;
+        }
+        if (useCustom && /^https?:\/\//i.test(trimmed)) return trimmed;
     }
     if (game && game.link) return game.link;
     return scheduleFallbackUrl(cfg.league);
@@ -299,7 +307,9 @@ async function refreshButton(context) {
         // Detect live → final transition and play fireworks
         const prevGameState = prevState.get(context);
         prevState.set(context, game ? game.state : null);
+        if (!game || game.state !== 'final') gameFinalAt.delete(context);
         if (prevGameState === 'live' && game && game.state === 'final') {
+            gameFinalAt.set(context, Date.now()); // starts the Custom Link post-final grace window
             const winnerIsHome = game.homeGoals >= game.awayGoals;
             const winnerId     = winnerIsHome ? game.homeId : game.awayId;
             log('Game over — fireworks for', teamName(league, winnerId));
