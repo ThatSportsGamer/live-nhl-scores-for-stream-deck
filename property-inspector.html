@@ -542,6 +542,17 @@
                    t.abbr.toLowerCase().indexOf(q) !== -1;
         });
 
+        // NHL matches first, then AHL, then ECHL — so an NHL team (and its
+        // affiliates) always leads, then whatever else matched. Done explicitly
+        // rather than relying on TEAMS order, since mergeLiveTeams() moves any
+        // league that refreshed to the end of the array (e.g. if only the NHL
+        // list loads, "Bruins" would otherwise put Providence ahead of Boston).
+        var LEAGUE_RANK = { nhl: 0, ahl: 1, echl: 2 };
+        direct = direct
+            .map(function(t, i) { return { t: t, i: i }; })
+            .sort(function(a, b) { return (LEAGUE_RANK[a.t.league] - LEAGUE_RANK[b.t.league]) || (a.i - b.i); })
+            .map(function(x) { return x.t; });
+
         var seen = {};
         var results = [];
         function add(t) {
