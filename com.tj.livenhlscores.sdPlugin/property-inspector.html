@@ -714,6 +714,26 @@
         }
     }
 
+    // Syncs the League/Division/Team dropdowns and the "Tracking:" banner to the
+    // saved team, against whichever team list (static fallback or live) is loaded
+    // right now. Kept separate from applySettings() so it can be re-run when the
+    // live list arrives without touching anything else — re-running
+    // applySettings() with only the team used to reset the background color and
+    // Custom Link fields to defaults, and the next change saved those blanks.
+    // Same pattern as the NBA and CFB plugins.
+    function syncTeamUI() {
+        if (!savedTeamId) return;
+        var team = TEAMS.find(function(t) { return t.value === savedTeamId && t.league === savedLeague; });
+        if (!team) return;
+        searchBox.value = team.name;
+        document.getElementById('leagueSelect').value = team.league;
+        renderDivisionSelect();
+        document.getElementById('divSelect').value = team.division;
+        renderTeamSelect();
+        document.getElementById('teamSelect').value = team.value;
+        showSelectedTeamBanner(team.name, team.league);
+    }
+
     // ── Settings ──────────────────────────────────────────────────────────────
     function applySettings(settings) {
         if (!settings) return;
@@ -728,17 +748,7 @@
             savedLeague   = settings.league || 'nhl';
             savedTeamAbbr = settings.teamAbbr || null;
             savedTeamName = settings.teamName || null;
-
-            var team = TEAMS.find(function(t) { return t.value === settings.teamId && t.league === savedLeague; });
-            if (team) {
-                searchBox.value = team.name;
-                document.getElementById('leagueSelect').value = team.league;
-                renderDivisionSelect();
-                document.getElementById('divSelect').value = team.division;
-                renderTeamSelect();
-                document.getElementById('teamSelect').value = team.value;
-                showSelectedTeamBanner(team.name, team.league);
-            }
+            syncTeamUI();
         }
 
         var bgEnabled      = document.getElementById('bgEnabled');
@@ -906,8 +916,8 @@
                 } else if (data.event === 'sendToPropertyInspector' && data.payload && data.payload.event === 'teamsData') {
                     mergeLiveTeams(data.payload.teams);
                     // A live list may have arrived after the saved-settings sync above
-                    // already ran off the static fallback — re-sync now that it's current.
-                    if (savedTeamId) applySettings({ league: savedLeague, teamId: savedTeamId });
+                    // already ran off the static fallback — re-sync the team UI only.
+                    syncTeamUI();
                 }
             } catch(e) {}
         };
