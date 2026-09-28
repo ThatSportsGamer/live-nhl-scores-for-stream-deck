@@ -4,7 +4,7 @@
 
 A Stream Deck plugin that shows live hockey scores directly on your keys — **NHL, AHL, and ECHL**. Each key tracks one team and updates automatically every 30 seconds.
 
-![Live NHL Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.1.13-green)
+![Live NHL Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.1.13-green) [![Elgato Marketplace](https://img.shields.io/badge/Elgato-Marketplace-black)](https://marketplace.elgato.com/product/live-nhl-scores-b463d273-9e52-4062-bfba-c30089b0c677)
 
 ---
 
@@ -95,9 +95,15 @@ A Stream Deck plugin that shows live hockey scores directly on your keys — **N
 
 ## Installation
 
+**Elgato Marketplace (recommended)**
+
+1. Open **[Live NHL Scores on the Elgato Marketplace](https://marketplace.elgato.com/product/live-nhl-scores-b463d273-9e52-4062-bfba-c30089b0c677)** and install it from there
+2. The plugin will appear in the Stream Deck action picker under **Live NHL Scores**
+
+**Manual install**
+
 1. Download the latest **`Live NHL Scores.streamDeckPlugin`** from the [Releases](../../releases) page
 2. Double-click the file — Stream Deck will install it automatically
-3. The plugin will appear in the Stream Deck action picker under **Live NHL Scores**
 
 ---
 
