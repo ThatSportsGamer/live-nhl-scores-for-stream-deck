@@ -772,6 +772,21 @@ async function fetchHockeyTechNextGame(league, teamId) {
     return { state: 'nextgame', matchup, dateLabel, time: g.ScheduledFormattedTime || fmtTime(startISO), awayId, homeId, awayAbbr, homeAbbr, link };
 }
 
+// A final from more than this many calendar days ago isn't worth holding on the
+// key. Matches the ±3 day window the scorebar is asked for, but that window turned
+// out not to be a hard bound in the offseason: the feed keeps returning a team's
+// last playoff final (e.g. a June Kelly Cup game) long after, and since a final
+// was returned the next-game lookup never ran and the key never moved on.
+const HT_STALE_FINAL_DAYS = 3;
+
+function isStaleHockeyTechFinal(g) {
+    if (classifyHockeyTechStatus(g).state !== 'final') return false;
+    const gameDay = Date.parse((g.Date || '').slice(0, 10));
+    const today   = Date.parse(todayDateStr());
+    if (!Number.isFinite(gameDay) || !Number.isFinite(today)) return false; // can't tell — keep it
+    return (today - gameDay) / 86400000 > HT_STALE_FINAL_DAYS;
+}
+
 // Picks the single most relevant game for this team out of the ±3 day window:
 // a game in progress beats an upcoming game, which beats a past final (so the
 // button holds the last result until the next game appears on the schedule).
@@ -780,8 +795,13 @@ function parseHockeyTechScores(data, league, teamId) {
         const games = data?.SiteKit?.Scorebar;
         if (!games?.length) { log(league.toUpperCase() + ' API: no games in window'); return null; }
 
-        const matches = games.filter(g => String(g.HomeID) === String(teamId) || String(g.VisitorID) === String(teamId));
-        if (!matches.length) { log(league.toUpperCase() + ' API: no games found for team', teamId); return null; }
+        const teamGames = games.filter(g => String(g.HomeID) === String(teamId) || String(g.VisitorID) === String(teamId));
+        if (!teamGames.length) { log(league.toUpperCase() + ' API: no games found for team', teamId); return null; }
+
+        // Drop stale finals so an offseason key falls through to the next scheduled
+        // game (fetchHockeyTechNextGame) instead of showing last season's result.
+        const matches = teamGames.filter(g => !isStaleHockeyTechFinal(g));
+        if (!matches.length) { log(league.toUpperCase() + ' API: only stale finals for team', teamId, '— falling through to next game'); return null; }
 
         let best = null, bestRank = -1, bestTime = null;
         for (const g of matches) {

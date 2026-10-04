@@ -30,6 +30,7 @@ A Stream Deck plugin that shows live hockey scores directly on your keys — **N
 **v1.1.14.0**
 - New: goal lamp — whenever either team scores, the key plays a short red goal-light animation with GOAL beneath it, then returns to the score. On by default; a new "Goal Lamp" checkbox in settings turns it off (you get the old quick flash in the scoring team's color instead)
 - A goal that's overturned and later counted again doesn't replay the animation
+- Fixed: in the offseason an AHL or ECHL key could keep showing last season's playoff final instead of the team's next game — finals more than 3 days old are now ignored
 - Settings help text now says "key" instead of "button"
 
 **v1.1.13.0**
