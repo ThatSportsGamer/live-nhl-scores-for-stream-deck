@@ -169,6 +169,7 @@ class SimpleWS extends events.EventEmitter {
 const instances     = new Map(); // context -> settings ({ league, teamId, teamAbbr, teamName })
 const prevScores    = new Map(); // context -> { awayGoals, homeGoals }
 const prevState     = new Map(); // context -> last known game state string
+const goalHigh      = new Map(); // context -> highest { awayGoals, homeGoals } seen this game (a goal that's waved off and later re-counted won't replay the goal lamp)
 const flashing      = new Set();
 const refreshing    = new Set();
 const lastRender    = new Map();
@@ -214,6 +215,7 @@ function handleEvent({ event, context, payload }) {
             instances.delete(context);
             prevScores.delete(context);
             prevState.delete(context);
+            goalHigh.delete(context);
             lastRender.delete(context);
             currentGame.delete(context);
             gameFinalAt.delete(context);
@@ -348,25 +350,49 @@ async function refreshButton(context) {
         const spacing = lines.some(l => typeof l === 'object') ? 1.2 : 1.4;
         log('→', JSON.stringify(lines));
 
-        // Detect score change on live games and flash in the scoring team's color
+        // Detect score change on live games. Any goal, either team, plays the goal
+        // lamp (unless the user turned it off in settings — then it falls back to
+        // the old flash in the scoring team's color).
         const prev = prevScores.get(context);
         if (game && game.state === 'live') {
             prevScores.set(context, { awayGoals: game.awayGoals, homeGoals: game.homeGoals });
+
+            // Highest score seen this game, per team. The lamp only fires when a score
+            // goes above it, so a goal that's overturned and later counted again
+            // doesn't replay. First poll of a game seeds it (no lamp on first load).
+            const hi = goalHigh.get(context) || { awayGoals: game.awayGoals, homeGoals: game.homeGoals };
+            const lampNew = game.awayGoals > hi.awayGoals || game.homeGoals > hi.homeGoals;
+            goalHigh.set(context, {
+                awayGoals: Math.max(hi.awayGoals, game.awayGoals),
+                homeGoals: Math.max(hi.homeGoals, game.homeGoals)
+            });
+
             if (prev) {
                 const awayScored = game.awayGoals > prev.awayGoals;
                 const homeScored = game.homeGoals > prev.homeGoals;
                 if (awayScored || homeScored) {
-                    const color = (awayScored && homeScored) ? '#FFFFFF'
-                        : awayScored ? teamColor(league, game.awayId)
-                                     : teamColor(league, game.homeId);
-                    log('Goal — flashing', color);
-                    refreshing.delete(context);
-                    flashButton(context, color, lines, spacing, resolveBgColor(cfg)).catch(e => log('flashButton error:', e.message));
-                    return;
+                    if (goalLampEnabled(cfg)) {
+                        if (lampNew) {
+                            log('Goal — playing goal lamp');
+                            refreshing.delete(context);
+                            playGoalLamp(context, lines, spacing, resolveBgColor(cfg)).catch(e => log('goal lamp error:', e.message));
+                            return;
+                        }
+                        log('Score went back up after a drop — skipping goal lamp');
+                    } else {
+                        const color = (awayScored && homeScored) ? '#FFFFFF'
+                            : awayScored ? teamColor(league, game.awayId)
+                                         : teamColor(league, game.homeId);
+                        log('Goal — flashing', color);
+                        refreshing.delete(context);
+                        flashButton(context, color, lines, spacing, resolveBgColor(cfg)).catch(e => log('flashButton error:', e.message));
+                        return;
+                    }
                 }
             }
         } else {
             prevScores.delete(context);
+            goalHigh.delete(context);
         }
 
         setButton(context, lines, spacing, resolveBgColor(cfg));
@@ -1046,6 +1072,106 @@ async function playFireworks(context, winnerName, winnerColor) {
         flashing.delete(context);
         lastRender.delete(context);
         refreshButton(context);
+    }
+}
+
+// ── Goal lamp ─────────────────────────────────────────────────────────────────
+// A red rotating goal light (fluted dome, chrome band, spinning reflector) with
+// GOAL beneath it. Drawn as plain SVG on the same 72x72 canvas as every other
+// key image, so it stays sharp on the Mini, standard and XL.
+const GOAL_LAMP_FRAMES = 48;
+const GOAL_LAMP_MS     = 100;
+
+function goalLampIntensity(frame) {
+    if (frame < 2)  return 0;                                    // dark lamp
+    if (frame < 8)  return [1, 0.15, 1, 0.25, 1, 0.5][frame - 2]; // flicker on
+    if (frame < 41) return 0.9 + 0.1 * Math.cos(frame * 0.9);     // spinning
+    return Math.max(0, 0.9 * (1 - (frame - 41) / 7));             // fade out
+}
+
+function mixRgb(a, b, t) { return a.map((v, i) => Math.round(v + (b[i] - v) * t)); }
+function rgbStr(c) { return `rgb(${c[0]},${c[1]},${c[2]})`; }
+
+function makeGoalLamp(frame) {
+    const W = 72, H = 72;
+    const inten = goalLampIntensity(frame);
+    const theta = frame * 0.55;
+    const lens  = rgbStr(mixRgb([105, 14, 20], [232, 30, 28], inten));
+    const ember = (0.10 + 0.90 * inten).toFixed(2);
+    const textC = rgbStr(mixRgb([120, 70, 75], [255, 255, 255], Math.pow(inten, 0.7)));
+
+    // reflector beams sweeping across the dome (one front, one behind)
+    let beams = '';
+    for (let k = 0; k < 2; k++) {
+        const th  = theta + k * Math.PI;
+        const bx  = 36 + Math.sin(th) * 15;
+        const op  = (Math.max(0, Math.cos(th)) * 0.85 + 0.12) * inten * 0.9;
+        if (op < 0.02) continue;
+        beams += `<rect x="${(bx - 4.5).toFixed(1)}" y="4" width="9" height="34" fill="url(#gb)" opacity="${op.toFixed(2)}"/>`;
+    }
+
+    // dome flutes — fewer, bolder lines than the full-size art so they survive 72px
+    let flutes = '';
+    [-60, -30, 0, 30, 60].forEach(a => {
+        const x = (36 + 17 * Math.sin(a * Math.PI / 180)).toFixed(1);
+        flutes += `<line x1="${x}" y1="3" x2="${x}" y2="38" stroke="#3A0508" stroke-width="1.3" opacity="0.55"/>`;
+    });
+
+    const defs =
+        `<defs>` +
+        `<clipPath id="gd"><path d="M19 38V18Q19 4 36 4Q53 4 53 18V38Z"/></clipPath>` +
+        `<radialGradient id="gh"><stop offset="0" stop-color="#E81E1C" stop-opacity="0.55"/><stop offset="1" stop-color="#E81E1C" stop-opacity="0"/></radialGradient>` +
+        `<radialGradient id="gl"><stop offset="0" stop-color="#FFEBAF"/><stop offset="0.35" stop-color="#FF8A50" stop-opacity="0.6"/><stop offset="1" stop-color="#E81E1C" stop-opacity="0"/></radialGradient>` +
+        `<linearGradient id="ge" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#000" stop-opacity="0.5"/><stop offset="0.3" stop-color="#000" stop-opacity="0"/><stop offset="0.7" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.55"/></linearGradient>` +
+        `<linearGradient id="gb" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#FF8C6E" stop-opacity="0"/><stop offset="0.5" stop-color="#FFB496"/><stop offset="1" stop-color="#FF8C6E" stop-opacity="0"/></linearGradient>` +
+        `<linearGradient id="gc" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#F2F2F2"/><stop offset="0.45" stop-color="#8C8C8C"/><stop offset="0.55" stop-color="#3C3C3C"/><stop offset="1" stop-color="#C4C4C4"/></linearGradient>` +
+        `</defs>`;
+
+    const font = `font-family="Helvetica Neue,Arial,sans-serif" font-size="19" font-weight="800" text-anchor="middle"`;
+
+    const svg =
+        `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="144" height="144" overflow="hidden">` +
+        defs +
+        `<rect width="${W}" height="${H}" fill="black"/>` +
+        `<circle cx="36" cy="22" r="32" fill="url(#gh)" opacity="${inten.toFixed(2)}"/>` +
+        `<rect x="20" y="50" width="32" height="3" rx="1.2" fill="#1A1A20"/>` +
+        `<rect x="16" y="43.5" width="40" height="7" rx="1.5" fill="url(#gc)"/>` +
+        `<rect x="16" y="43.5" width="40" height="7" rx="1.5" fill="#E81E1C" opacity="${(0.12 * inten).toFixed(2)}"/>` +
+        `<g clip-path="url(#gd)">` +
+            `<rect x="19" y="3" width="34" height="36" fill="${lens}"/>` +
+            flutes +
+            `<circle cx="36" cy="22" r="14" fill="url(#gl)" opacity="${ember}"/>` +
+            beams +
+            `<rect x="19" y="3" width="34" height="36" fill="url(#ge)"/>` +
+            `<rect x="24" y="8" width="2.4" height="28" rx="1" fill="white" opacity="${(0.22 + 0.18 * inten).toFixed(2)}"/>` +
+        `</g>` +
+        `<circle cx="36" cy="22" r="2.4" fill="#FFEBAF" opacity="${ember}"/>` +
+        `<rect x="15" y="36" width="42" height="8" rx="4" fill="#5F0C10"/>` +
+        `<rect x="15" y="36" width="42" height="8" rx="4" fill="#E81E1C" opacity="${(0.30 * inten).toFixed(2)}"/>` +
+        `<rect x="19" y="37.2" width="34" height="1.2" rx="0.6" fill="#FF9696" opacity="0.35"/>` +
+        `<text x="36" y="69" ${font} fill="#000" stroke="#000" stroke-width="3.4" stroke-linejoin="round">GOAL</text>` +
+        `<text x="36" y="69" ${font} fill="${textC}">GOAL</text>` +
+        `</svg>`;
+
+    return 'data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64');
+}
+
+// On by default; only an explicit false (the settings checkbox) turns it off.
+function goalLampEnabled(cfg) { return !cfg || cfg.goalLamp !== false; }
+
+async function playGoalLamp(context, lines, spacing, restColor = 'black') {
+    if (flashing.has(context)) return;
+    flashing.add(context);
+    log('→ goal lamp');
+    try {
+        for (let i = 0; i < GOAL_LAMP_FRAMES; i++) {
+            if (!instances.has(context)) return; // key was removed mid-animation
+            ws.send(JSON.stringify({ event: 'setImage', context, payload: { image: makeGoalLamp(i), target: 0 } }));
+            await sleep(GOAL_LAMP_MS);
+        }
+    } finally {
+        flashing.delete(context);
+        if (instances.has(context)) setButton(context, lines, spacing, restColor, true);
     }
 }
 

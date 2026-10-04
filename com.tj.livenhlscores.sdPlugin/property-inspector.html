@@ -307,10 +307,20 @@
     <div class="bg-hint">Score and status text is white (or your team's color) — lighter or brighter backgrounds can make it harder to read.</div>
 </div>
 
+<div class="field" style="margin-top: 16px;">
+    <label>Goal Lamp</label>
+    <div class="checkbox-row">
+        <input type="checkbox" id="goalLampEnabled" checked/>
+        <label for="goalLampEnabled">Flash the goal lamp when a goal is scored</label>
+    </div>
+    <div class="bg-hint">Plays a few seconds of red goal light with GOAL on the key whenever either team scores. Turn it off to get a quick flash in the scoring team's color instead.</div>
+</div>
+
 <div class="info-box">
     <strong>How it works:</strong><br>
     • Scores refresh automatically every <strong>30 seconds</strong><br>
-    • Press the button anytime to open the game recap or gamecenter<br>
+    • Press the key anytime to open the game recap or gamecenter<br>
+    • A goal lamp animation plays on the key when either team scores<br>
     • Shows score + period/time during live games<br>
     • Shows matchup and start time before the game<br>
     • Shows Final / Final/OT / Final/SO when the game ends<br>
@@ -473,7 +483,7 @@
 
     // Current background settings — kept separate from the team fields so
     // changing the team doesn't clobber the background color (and vice versa).
-    var currentSettings = { bgColor: null, bgOpacity: 100, linkType: 'gamecenter', customLink: '' };
+    var currentSettings = { bgColor: null, bgOpacity: 100, linkType: 'gamecenter', customLink: '', goalLamp: true };
 
     // NHL team abbr → AHL/ECHL affiliate abbr. Hand-maintained — unlike the
     // MiLB plugin's live parentOrgId (MLB Stats API exposes the parent org
@@ -742,6 +752,7 @@
         currentSettings.bgOpacity = settings.bgOpacity != null ? settings.bgOpacity : 100;
         currentSettings.linkType  = settings.linkType  || 'gamecenter';
         currentSettings.customLink = settings.customLink || '';
+        currentSettings.goalLamp  = settings.goalLamp !== false;
 
         if (settings.teamId) {
             savedTeamId   = settings.teamId;
@@ -763,6 +774,7 @@
         bgOpacityLabel.textContent = currentSettings.bgOpacity + '%';
         bgControls.classList.toggle('disabled', !bgEnabled.checked);
 
+        document.getElementById('goalLampEnabled').checked = currentSettings.goalLamp;
         document.getElementById('linkType').value = currentSettings.linkType;
         document.getElementById('customLinkInput').value = currentSettings.customLink;
         document.getElementById('customLinkField').style.display = currentSettings.linkType === 'custom' ? 'block' : 'none';
@@ -778,7 +790,8 @@
             bgColor:    currentSettings.bgColor,
             bgOpacity:  currentSettings.bgOpacity,
             linkType:   currentSettings.linkType,
-            customLink: currentSettings.customLink
+            customLink: currentSettings.customLink,
+            goalLamp:   currentSettings.goalLamp
         };
         websocket.send(JSON.stringify({ event: 'setSettings',  context: uuid,        payload: payload }));
         websocket.send(JSON.stringify({ event: 'sendToPlugin', context: uuid, action: actionUUID, payload: { event: 'settingsChanged', settings: payload } }));
@@ -809,7 +822,13 @@
         if (bgEnabledEl.checked) saveSettings();
     });
 
-    // ── Button-press link controls ────────────────────────────────────────────
+    // ── Goal lamp toggle ──────────────────────────────────────────────────────
+    document.getElementById('goalLampEnabled').addEventListener('change', function() {
+        currentSettings.goalLamp = this.checked;
+        saveSettings();
+    });
+
+    // ── Key-press link controls ───────────────────────────────────────────────
     var linkTypeEl      = document.getElementById('linkType');
     var customLinkField = document.getElementById('customLinkField');
     var customLinkEl     = document.getElementById('customLinkInput');

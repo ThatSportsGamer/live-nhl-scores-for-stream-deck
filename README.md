@@ -4,7 +4,7 @@
 
 A Stream Deck plugin that shows live hockey scores directly on your keys — **NHL, AHL, and ECHL**. Each key tracks one team and updates automatically every 30 seconds.
 
-![Live NHL Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.1.13-green) [![Elgato Marketplace](https://img.shields.io/badge/Elgato-Marketplace-black)](https://marketplace.elgato.com/product/live-nhl-scores-b463d273-9e52-4062-bfba-c30089b0c677)
+![Live NHL Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.1.14-green) [![Elgato Marketplace](https://img.shields.io/badge/Elgato-Marketplace-black)](https://marketplace.elgato.com/product/live-nhl-scores-b463d273-9e52-4062-bfba-c30089b0c677)
 
 ---
 
@@ -16,7 +16,7 @@ A Stream Deck plugin that shows live hockey scores directly on your keys — **N
 - **Live scores** — shows away score, home score, and current period/time while a game is in progress
 - **Pre-game** — shows the matchup (e.g. `TOR @ BOS`) and scheduled start time
 - **Final scores** — shows the final score with a "Final", "Final/OT", or "Final/SO" label
-- **Score-change flash** — when a team scores, the key flashes in that team's primary color
+- **Goal lamp** — when either team scores, the key plays a few seconds of red goal light with GOAL beneath it (on by default; turn it off per key in settings to get a quick flash in the scoring team's primary color instead)
 - **Custom key background** — pick any color and opacity for the key background in settings
 - **Custom link** — send key presses to any URL you choose instead of Gamecenter
 - **Browser shortcut** — press any key to open that game's recap or gamecenter
@@ -26,6 +26,11 @@ A Stream Deck plugin that shows live hockey scores directly on your keys — **N
 ---
 
 ## Recent Updates
+
+**v1.1.14.0**
+- New: goal lamp — whenever either team scores, the key plays a short red goal-light animation with GOAL beneath it, then returns to the score. On by default; a new "Goal Lamp" checkbox in settings turns it off (you get the old quick flash in the scoring team's color instead)
+- A goal that's overturned and later counted again doesn't replay the animation
+- Settings help text now says "key" instead of "button"
 
 **v1.1.13.0**
 - Fixed: reopening a key's settings could reset the background color and Custom Link fields once the live team list loaded, and the next change saved them blank
