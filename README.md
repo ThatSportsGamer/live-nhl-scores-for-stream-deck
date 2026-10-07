@@ -4,7 +4,7 @@
 
 A Stream Deck plugin that shows live hockey scores directly on your keys — **NHL, AHL, and ECHL**. Each key tracks one team and updates automatically every 30 seconds.
 
-![Live NHL Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.1.14-green) [![Elgato Marketplace](https://img.shields.io/badge/Elgato-Marketplace-black)](https://marketplace.elgato.com/product/live-nhl-scores-b463d273-9e52-4062-bfba-c30089b0c677)
+![Live NHL Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.1.15-green) [![Elgato Marketplace](https://img.shields.io/badge/Elgato-Marketplace-black)](https://marketplace.elgato.com/product/live-nhl-scores-b463d273-9e52-4062-bfba-c30089b0c677)
 
 ---
 
@@ -16,7 +16,7 @@ A Stream Deck plugin that shows live hockey scores directly on your keys — **N
 - **Live scores** — shows away score, home score, and current period/time while a game is in progress
 - **Pre-game** — shows the matchup (e.g. `TOR @ BOS`) and scheduled start time
 - **Final scores** — shows the final score with a "Final", "Final/OT", or "Final/SO" label
-- **Goal lamp** — when either team scores, the key plays a few seconds of red goal light with GOAL beneath it (on by default; turn it off per key in settings to get a quick flash in the scoring team's primary color instead)
+- **Goal lamp** — when either team scores, the key plays a few seconds of red goal light on the scoring team's color; for NHL games it's followed by a short card naming the team and whether it was a power-play, shorthanded, empty-net or penalty-shot goal (on by default; turn it off per key in settings to get a quick solid flash in the scoring team's primary color instead)
 - **Custom key background** — pick any color and opacity for the key background in settings
 - **Custom link** — send key presses to any URL you choose instead of Gamecenter
 - **Browser shortcut** — press any key to open that game's recap or gamecenter
@@ -26,6 +26,11 @@ A Stream Deck plugin that shows live hockey scores directly on your keys — **N
 ---
 
 ## Recent Updates
+
+**v1.1.15.0**
+- Goal lamp now glows over the scoring team's color (black if both teams scored in the same update), and the lamp fills more of the key — the GOAL text under it is gone
+- New: after the lamp on NHL games, a 3-second card shows the scoring team and the type of goal — POWER PLAY, SHORTHANDED, EMPTY NET or PENALTY SHOT in yellow (even-strength goals show just the team and GOAL). AHL and ECHL keys get the team-color lamp only
+- With the goal lamp turned off, the flash is now 5 solid blinks of the scoring team's color with no text, so it reads at a glance
 
 **v1.1.14.0**
 - New: goal lamp — whenever either team scores, the key plays a short red goal-light animation with GOAL beneath it, then returns to the score. On by default; a new "Goal Lamp" checkbox in settings turns it off (you get the old quick flash in the scoring team's color instead)

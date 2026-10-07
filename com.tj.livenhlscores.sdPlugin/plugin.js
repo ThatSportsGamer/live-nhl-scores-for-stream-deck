@@ -351,8 +351,9 @@ async function refreshButton(context) {
         log('→', JSON.stringify(lines));
 
         // Detect score change on live games. Any goal, either team, plays the goal
-        // lamp (unless the user turned it off in settings — then it falls back to
-        // the old flash in the scoring team's color).
+        // lamp on the scoring team's color, then (NHL only) a label card with the
+        // team and strength. If the user turned the lamp off in settings it falls
+        // back to a solid flash in the scoring team's color.
         const prev = prevScores.get(context);
         if (game && game.state === 'live') {
             prevScores.set(context, { awayGoals: game.awayGoals, homeGoals: game.homeGoals });
@@ -373,14 +374,18 @@ async function refreshButton(context) {
                 if (awayScored || homeScored) {
                     if (goalLampEnabled(cfg)) {
                         if (lampNew) {
-                            log('Goal — playing goal lamp');
+                            const both     = awayScored && homeScored;
+                            const scorerId = both ? null : awayScored ? game.awayId : game.homeId;
+                            const lampBg   = both ? 'black' : teamColor(league, scorerId);
+                            const card     = both ? null : goalLabelLines(league, game, scorerId);
+                            log('Goal — playing goal lamp', lampBg, card ? JSON.stringify(card) : '(no label card)');
                             refreshing.delete(context);
-                            playGoalLamp(context, lines, spacing, resolveBgColor(cfg)).catch(e => log('goal lamp error:', e.message));
+                            playGoalLamp(context, lines, spacing, resolveBgColor(cfg), lampBg, card).catch(e => log('goal lamp error:', e.message));
                             return;
                         }
                         log('Score went back up after a drop — skipping goal lamp');
                     } else {
-                        const color = (awayScored && homeScored) ? '#FFFFFF'
+                        const color = (awayScored && homeScored) ? '#FFFFFF' // white, so it shows on black
                             : awayScored ? teamColor(league, game.awayId)
                                          : teamColor(league, game.homeId);
                         log('Goal — flashing', color);
@@ -705,7 +710,18 @@ function parseNhlScores(data, teamAbbrVal) {
                              : inIntermission     ? pLabel + ' INT'
                              : pLabel + ' ' + timeRemaining;
 
-        return { state: 'live', matchup, awayId, homeId, awayAbbr, homeAbbr, awayGoals, homeGoals, period, periodStr, link };
+        // Latest goal's team / strength / modifier, for the label card after the
+        // goal lamp. Already in this response — no extra request needed.
+        const goals = Array.isArray(g.goals) ? g.goals : [];
+        const lg    = goals[goals.length - 1];
+        const lastGoal = lg ? {
+            team:     lg.teamAbbrev?.default || lg.teamAbbrev || '',
+            strength: (lg.strength || '').toLowerCase(),       // 'pp' | 'sh' | 'ev'
+            modifier: (lg.goalModifier || '').toLowerCase(),   // 'empty-net' | 'penalty-shot' | 'none'
+            count:    goals.length
+        } : null;
+
+        return { state: 'live', matchup, awayId, homeId, awayAbbr, homeAbbr, awayGoals, homeGoals, period, periodStr, link, lastGoal };
 
     } catch (e) {
         log('parseNhlScores error:', e.message);
@@ -1096,8 +1112,8 @@ async function playFireworks(context, winnerName, winnerColor) {
 }
 
 // ── Goal lamp ─────────────────────────────────────────────────────────────────
-// A red rotating goal light (fluted dome, chrome band, spinning reflector) with
-// GOAL beneath it. Drawn as plain SVG on the same 72x72 canvas as every other
+// A red rotating goal light (fluted dome, chrome band, spinning reflector),
+// centered on the scoring team's color (black if both teams scored). Drawn as plain SVG on the same 72x72 canvas as every other
 // key image, so it stays sharp on the Mini, standard and XL.
 const GOAL_LAMP_FRAMES = 48;
 const GOAL_LAMP_MS     = 100;
@@ -1112,13 +1128,12 @@ function goalLampIntensity(frame) {
 function mixRgb(a, b, t) { return a.map((v, i) => Math.round(v + (b[i] - v) * t)); }
 function rgbStr(c) { return `rgb(${c[0]},${c[1]},${c[2]})`; }
 
-function makeGoalLamp(frame) {
+function makeGoalLamp(frame, bg = 'black') {
     const W = 72, H = 72;
     const inten = goalLampIntensity(frame);
     const theta = frame * 0.55;
     const lens  = rgbStr(mixRgb([105, 14, 20], [232, 30, 28], inten));
     const ember = (0.10 + 0.90 * inten).toFixed(2);
-    const textC = rgbStr(mixRgb([120, 70, 75], [255, 255, 255], Math.pow(inten, 0.7)));
 
     // reflector beams sweeping across the dome (one front, one behind)
     let beams = '';
@@ -1147,12 +1162,12 @@ function makeGoalLamp(frame) {
         `<linearGradient id="gc" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#F2F2F2"/><stop offset="0.45" stop-color="#8C8C8C"/><stop offset="0.55" stop-color="#3C3C3C"/><stop offset="1" stop-color="#C4C4C4"/></linearGradient>` +
         `</defs>`;
 
-    const font = `font-family="Helvetica Neue,Arial,sans-serif" font-size="19" font-weight="800" text-anchor="middle"`;
-
     const svg =
         `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="144" height="144" overflow="hidden">` +
         defs +
-        `<rect width="${W}" height="${H}" fill="black"/>` +
+        `<rect width="${W}" height="${H}" fill="${bg}"/>` +
+        // lamp art spans y 3–53; scale it up and center it on the key
+        `<g transform="translate(36 36) scale(1.22) translate(-36 -28.5)">` +
         `<circle cx="36" cy="22" r="32" fill="url(#gh)" opacity="${inten.toFixed(2)}"/>` +
         `<rect x="20" y="50" width="32" height="3" rx="1.2" fill="#1A1A20"/>` +
         `<rect x="16" y="43.5" width="40" height="7" rx="1.5" fill="url(#gc)"/>` +
@@ -1169,8 +1184,7 @@ function makeGoalLamp(frame) {
         `<rect x="15" y="36" width="42" height="8" rx="4" fill="#5F0C10"/>` +
         `<rect x="15" y="36" width="42" height="8" rx="4" fill="#E81E1C" opacity="${(0.30 * inten).toFixed(2)}"/>` +
         `<rect x="19" y="37.2" width="34" height="1.2" rx="0.6" fill="#FF9696" opacity="0.35"/>` +
-        `<text x="36" y="69" ${font} fill="#000" stroke="#000" stroke-width="3.4" stroke-linejoin="round">GOAL</text>` +
-        `<text x="36" y="69" ${font} fill="${textC}">GOAL</text>` +
+        `</g>` +
         `</svg>`;
 
     return 'data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64');
@@ -1179,15 +1193,44 @@ function makeGoalLamp(frame) {
 // On by default; only an explicit false (the settings checkbox) turns it off.
 function goalLampEnabled(cfg) { return !cfg || cfg.goalLamp !== false; }
 
-async function playGoalLamp(context, lines, spacing, restColor = 'black') {
+// Label card shown after the lamp (NHL only — the AHL/ECHL feed isn't parsed
+// for strength). Lines: team / strength (yellow, omitted at even strength) / GOAL.
+// Returns null when the API's latest goal doesn't match the goal we detected,
+// so a lagging goals[] list never labels the wrong goal.
+const GOAL_LABEL_MS = 3000;
+
+function goalLabelLines(league, game, scorerId) {
+    if (league !== 'nhl' || !game || !game.lastGoal) return null;
+    const g = game.lastGoal;
+    if (g.team !== scorerId) return null;
+    if (g.count !== (game.awayGoals || 0) + (game.homeGoals || 0)) return null;
+
+    const strength = g.modifier === 'penalty-shot' ? 'PENALTY SHOT'
+                   : g.strength === 'pp'           ? 'POWER PLAY'
+                   : g.strength === 'sh'           ? 'SHORTHANDED'
+                   : g.modifier === 'empty-net'    ? 'EMPTY NET'
+                   : null;
+    const fit = (t, max) => Math.min(max, Math.floor(62 / (t.length * 0.62)));
+    const out = [{ text: scorerId, fs: 22 }];
+    if (strength) out.push({ text: strength, fs: fit(strength, 15), color: '#FFD700' });
+    out.push({ text: 'GOAL', fs: 18 });
+    return out;
+}
+
+async function playGoalLamp(context, lines, spacing, restColor = 'black', lampBg = 'black', card = null) {
     if (flashing.has(context)) return;
     flashing.add(context);
     log('→ goal lamp');
     try {
         for (let i = 0; i < GOAL_LAMP_FRAMES; i++) {
             if (!instances.has(context)) return; // key was removed mid-animation
-            ws.send(JSON.stringify({ event: 'setImage', context, payload: { image: makeGoalLamp(i), target: 0 } }));
+            ws.send(JSON.stringify({ event: 'setImage', context, payload: { image: makeGoalLamp(i, lampBg), target: 0 } }));
             await sleep(GOAL_LAMP_MS);
+        }
+        if (card && instances.has(context)) {
+            // always black, even with a custom key background
+            setButton(context, card, 1.22, 'black', true);
+            await sleep(GOAL_LABEL_MS);
         }
     } finally {
         flashing.delete(context);
@@ -1215,10 +1258,12 @@ async function flashButton(context, color, lines, spacing, restColor = 'black') 
     flashing.add(context);
     log('→ flash', color);
     try {
-        for (let i = 0; i < 4; i++) {
-            setButton(context, lines, spacing, color, true);
+        // solid color, no text, 5 blinks (2.0 s)
+        for (let i = 0; i < 5; i++) {
+            if (!instances.has(context)) return;
+            setButton(context, [''], spacing, color, true);
             await sleep(200);
-            setButton(context, lines, spacing, restColor, true);
+            setButton(context, [''], spacing, restColor, true);
             await sleep(200);
         }
     } finally {
