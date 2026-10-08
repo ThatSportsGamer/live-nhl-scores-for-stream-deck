@@ -377,7 +377,8 @@ async function refreshButton(context) {
                             const both     = awayScored && homeScored;
                             const scorerId = both ? null : awayScored ? game.awayId : game.homeId;
                             const lampBg   = both ? 'black' : teamColor(league, scorerId);
-                            const card     = both ? null : goalLabelLines(league, game, scorerId);
+                            const scored   = both ? 0 : awayScored ? game.awayGoals - prev.awayGoals : game.homeGoals - prev.homeGoals;
+                            const card     = both ? null : goalLabelLines(league, game, scorerId, awayScored ? game.awayAbbr : game.homeAbbr, scored);
                             log('Goal — playing goal lamp', lampBg, card ? JSON.stringify(card) : '(no label card)');
                             refreshing.delete(context);
                             playGoalLamp(context, lines, spacing, resolveBgColor(cfg), lampBg, card).catch(e => log('goal lamp error:', e.message));
@@ -1193,28 +1194,35 @@ function makeGoalLamp(frame, bg = 'black') {
 // On by default; only an explicit false (the settings checkbox) turns it off.
 function goalLampEnabled(cfg) { return !cfg || cfg.goalLamp !== false; }
 
-// Label card shown after the lamp (NHL only — the AHL/ECHL feed isn't parsed
-// for strength). Lines: team / strength (yellow, omitted at even strength) / GOAL.
-// Returns null when the API's latest goal doesn't match the goal we detected,
-// so a lagging goals[] list never labels the wrong goal.
+// Label card shown after the lamp: team (white) / goal type + count (yellow),
+// matching the baseball and football cards. NHL types come from the latest
+// entry in goals[]: PS / AWD / EN take priority, then PPG / SHG / EV from the
+// strength (own goals just show their strength — "OWN" would read as the
+// credited team scoring on itself). AHL/ECHL (no strength in that feed), two
+// goals by one team in one poll, or an NHL goals[] list that hasn't caught up
+// to the score all fall back to "GOAL +n".
 const GOAL_LABEL_MS = 3000;
 
-function goalLabelLines(league, game, scorerId) {
-    if (league !== 'nhl' || !game || !game.lastGoal) return null;
-    const g = game.lastGoal;
-    if (g.team !== scorerId) return null;
+function goalType(game, scorerId) {
+    const g = game && game.lastGoal;
+    if (!g || g.team !== scorerId) return null;
     if (g.count !== (game.awayGoals || 0) + (game.homeGoals || 0)) return null;
+    const m = g.modifier || '';
+    if (m.includes('penalty')) return 'PS';
+    if (m.includes('award'))   return 'AWD';
+    if (m === 'empty-net')     return 'EN';
+    if (g.strength === 'pp')   return 'PPG';
+    if (g.strength === 'sh')   return 'SHG';
+    if (g.strength === 'ev')   return 'EV';
+    return null;
+}
 
-    const strength = g.modifier === 'penalty-shot' ? 'PENALTY SHOT'
-                   : g.strength === 'pp'           ? 'POWER PLAY'
-                   : g.strength === 'sh'           ? 'SHORTHANDED'
-                   : g.modifier === 'empty-net'    ? 'EMPTY NET'
-                   : null;
-    const fit = (t, max) => Math.min(max, Math.floor(62 / (t.length * 0.62)));
-    const out = [{ text: scorerId, fs: 22 }];
-    if (strength) out.push({ text: strength, fs: fit(strength, 15), color: '#FFD700' });
-    out.push({ text: 'GOAL', fs: 18 });
-    return out;
+function goalLabelLines(league, game, scorerId, abbr, scored = 1) {
+    if (!game || !abbr || !(scored > 0)) return null;
+    const type = (league === 'nhl' && scored === 1) ? goalType(game, scorerId) : null;
+    const text = (type || 'GOAL') + ' +' + scored;
+    const tfs  = Math.min(24, Math.floor(64 / (abbr.length * 0.62)));
+    return [{ text: abbr, fs: tfs }, { text, fs: 16, color: '#FFD700' }];
 }
 
 async function playGoalLamp(context, lines, spacing, restColor = 'black', lampBg = 'black', card = null) {
@@ -1229,7 +1237,7 @@ async function playGoalLamp(context, lines, spacing, restColor = 'black', lampBg
         }
         if (card && instances.has(context)) {
             // always black, even with a custom key background
-            setButton(context, card, 1.22, 'black', true);
+            setButton(context, card, 1.3, 'black', true);
             await sleep(GOAL_LABEL_MS);
         }
     } finally {
