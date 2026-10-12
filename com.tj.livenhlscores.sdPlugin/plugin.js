@@ -200,7 +200,11 @@ ws.on('close', ()  => {
 });
 
 // ── Stream Deck event handler ─────────────────────────────────────────────────
-function handleEvent({ event, context, payload }) {
+function handleEvent(ev) {
+    const { event, context, payload } = ev;
+    // Scoreboard keys are a separate action with their own handler (see the
+    // Scoreboard section at the bottom of this file).
+    if (ev.action === BOARD_ACTION || (context && boardKeys.has(context))) { handleBoardEvent(ev); return; }
     switch (event) {
 
         case 'willAppear':
@@ -330,84 +334,98 @@ async function refreshButton(context) {
     log('Refreshing', league, cfg.teamAbbr || cfg.teamId);
     try {
         const game = await fetchGame(league, cfg.teamId);
-        currentGame.set(context, game || null);
-
-        // Detect live → final transition and play fireworks
-        const prevGameState = prevState.get(context);
-        prevState.set(context, game ? game.state : null);
-        if (!game || game.state !== 'final') gameFinalAt.delete(context);
-        if (prevGameState === 'live' && game && game.state === 'final') {
-            gameFinalAt.set(context, Date.now()); // starts the Custom Link post-final grace window
-            const winnerIsHome = game.homeGoals >= game.awayGoals;
-            const winnerId     = winnerIsHome ? game.homeId : game.awayId;
-            log('Game over — fireworks for', teamName(league, winnerId));
-            refreshing.delete(context);
-            playFireworks(context, teamName(league, winnerId), teamColor(league, winnerId)).catch(e => log('fireworks error:', e.message));
-            return;
-        }
-
-        const lines   = buildLines(game, cfg);
-        const spacing = lines.some(l => typeof l === 'object') ? 1.2 : 1.4;
-        log('→', JSON.stringify(lines));
-
-        // Detect score change on live games. Any goal, either team, plays the goal
-        // lamp on the scoring team's color, then (NHL only) a label card with the
-        // team and strength. If the user turned the lamp off in settings it falls
-        // back to a solid flash in the scoring team's color.
-        const prev = prevScores.get(context);
-        if (game && game.state === 'live') {
-            prevScores.set(context, { awayGoals: game.awayGoals, homeGoals: game.homeGoals });
-
-            // Highest score seen this game, per team. The lamp only fires when a score
-            // goes above it, so a goal that's overturned and later counted again
-            // doesn't replay. First poll of a game seeds it (no lamp on first load).
-            const hi = goalHigh.get(context) || { awayGoals: game.awayGoals, homeGoals: game.homeGoals };
-            const lampNew = game.awayGoals > hi.awayGoals || game.homeGoals > hi.homeGoals;
-            goalHigh.set(context, {
-                awayGoals: Math.max(hi.awayGoals, game.awayGoals),
-                homeGoals: Math.max(hi.homeGoals, game.homeGoals)
-            });
-
-            if (prev) {
-                const awayScored = game.awayGoals > prev.awayGoals;
-                const homeScored = game.homeGoals > prev.homeGoals;
-                if (awayScored || homeScored) {
-                    if (goalLampEnabled(cfg)) {
-                        if (lampNew) {
-                            const both     = awayScored && homeScored;
-                            const scorerId = both ? null : awayScored ? game.awayId : game.homeId;
-                            const lampBg   = both ? 'black' : teamColor(league, scorerId);
-                            const scored   = both ? 0 : awayScored ? game.awayGoals - prev.awayGoals : game.homeGoals - prev.homeGoals;
-                            const card     = both ? null : goalLabelLines(league, game, scorerId, awayScored ? game.awayAbbr : game.homeAbbr, scored);
-                            log('Goal — playing goal lamp', lampBg, card ? JSON.stringify(card) : '(no label card)');
-                            refreshing.delete(context);
-                            playGoalLamp(context, lines, spacing, resolveBgColor(cfg), lampBg, card).catch(e => log('goal lamp error:', e.message));
-                            return;
-                        }
-                        log('Score went back up after a drop — skipping goal lamp');
-                    } else {
-                        const color = (awayScored && homeScored) ? '#FFFFFF' // white, so it shows on black
-                            : awayScored ? teamColor(league, game.awayId)
-                                         : teamColor(league, game.homeId);
-                        log('Goal — flashing', color);
-                        refreshing.delete(context);
-                        flashButton(context, color, lines, spacing, resolveBgColor(cfg)).catch(e => log('flashButton error:', e.message));
-                        return;
-                    }
-                }
-            }
-        } else {
-            prevScores.delete(context);
-            goalHigh.delete(context);
-        }
-
-        setButton(context, lines, spacing, resolveBgColor(cfg));
+        presentGame(context, game, cfg);
     } catch (err) {
         log('Fetch error:', err.message);
         setButton(context, [cfg.teamAbbr || league.toUpperCase(), 'Err'], undefined, resolveBgColor(cfg));
     } finally {
         refreshing.delete(context);
     }
+}
+
+// Draws one key for one game: fireworks on live → final, the goal lamp (or
+// flash) + goal card, or the plain score. Shared by team keys (refreshButton)
+// and Scoreboard keys (renderBoardKey).
+function presentGame(context, game, cfg) {
+    const league = cfg.league || 'nhl';
+    currentGame.set(context, game || null);
+    const gid = game ? (game.eventId || game.link || game.matchup) : null;
+
+    // Detect live → final transition and play fireworks. Per-key memory is
+    // matched by game, so a Scoreboard key whose slot moves to a different
+    // game never compares one game against another.
+    const prevGame      = prevState.get(context);
+    const prevGameState = prevGame && prevGame.gid === gid ? prevGame.state : null;
+    prevState.set(context, game ? { gid, state: game.state } : null);
+    if (!game || game.state !== 'final') gameFinalAt.delete(context);
+    if (prevGameState === 'live' && game && game.state === 'final') {
+        gameFinalAt.set(context, Date.now()); // starts the Custom Link post-final grace window
+        const winnerIsHome = game.homeGoals >= game.awayGoals;
+        const winnerId     = winnerIsHome ? game.homeId : game.awayId;
+        log('Game over — fireworks for', teamName(league, winnerId));
+        refreshing.delete(context);
+        playFireworks(context, teamName(league, winnerId), teamColor(league, winnerId)).catch(e => log('fireworks error:', e.message));
+        return;
+    }
+
+    const lines   = buildLines(game, cfg);
+    const spacing = lines.some(l => typeof l === 'object') ? 1.2 : 1.4;
+    log('→', JSON.stringify(lines));
+
+    // Detect score change on live games. Any goal, either team, plays the goal
+    // lamp on the scoring team's color, then (NHL only) a label card with the
+    // team and strength. If the user turned the lamp off in settings it falls
+    // back to a solid flash in the scoring team's color.
+    const prevRaw = prevScores.get(context);
+    const prev    = prevRaw && prevRaw.gid === gid ? prevRaw : null;
+    if (prevRaw && !prev) goalHigh.delete(context); // slot moved to a different game
+    if (game && game.state === 'live') {
+        prevScores.set(context, { gid, awayGoals: game.awayGoals, homeGoals: game.homeGoals });
+
+        // Highest score seen this game, per team. The lamp only fires when a score
+        // goes above it, so a goal that's overturned and later counted again
+        // doesn't replay. First poll of a game seeds it (no lamp on first load).
+        const hi = goalHigh.get(context) || { awayGoals: game.awayGoals, homeGoals: game.homeGoals };
+        const lampNew = game.awayGoals > hi.awayGoals || game.homeGoals > hi.homeGoals;
+        goalHigh.set(context, {
+            awayGoals: Math.max(hi.awayGoals, game.awayGoals),
+            homeGoals: Math.max(hi.homeGoals, game.homeGoals)
+        });
+
+        if (prev) {
+            const awayScored = game.awayGoals > prev.awayGoals;
+            const homeScored = game.homeGoals > prev.homeGoals;
+            if (awayScored || homeScored) {
+                if (goalLampEnabled(cfg)) {
+                    if (lampNew) {
+                        const both     = awayScored && homeScored;
+                        const scorerId = both ? null : awayScored ? game.awayId : game.homeId;
+                        const lampBg   = both ? 'black' : teamColor(league, scorerId);
+                        const scored   = both ? 0 : awayScored ? game.awayGoals - prev.awayGoals : game.homeGoals - prev.homeGoals;
+                        const card     = both ? null : goalLabelLines(league, game, scorerId, awayScored ? game.awayAbbr : game.homeAbbr, scored);
+                        log('Goal — playing goal lamp', lampBg, card ? JSON.stringify(card) : '(no label card)');
+                        refreshing.delete(context);
+                        playGoalLamp(context, lines, spacing, resolveBgColor(cfg), lampBg, card).catch(e => log('goal lamp error:', e.message));
+                        return;
+                    }
+                    log('Score went back up after a drop — skipping goal lamp');
+                } else {
+                    const color = (awayScored && homeScored) ? '#FFFFFF' // white, so it shows on black
+                        : awayScored ? teamColor(league, game.awayId)
+                                     : teamColor(league, game.homeId);
+                    log('Goal — flashing', color);
+                    refreshing.delete(context);
+                    flashButton(context, color, lines, spacing, resolveBgColor(cfg)).catch(e => log('flashButton error:', e.message));
+                    return;
+                }
+            }
+        }
+    } else {
+        prevScores.delete(context);
+        goalHigh.delete(context);
+    }
+
+    setButton(context, lines, spacing, resolveBgColor(cfg));
 }
 
 // ── Build button display lines ────────────────────────────────────────────────
@@ -670,6 +688,16 @@ function parseNhlScores(data, teamAbbrVal) {
             g?.awayTeam?.abbrev === teamAbbrVal || g?.homeTeam?.abbrev === teamAbbrVal
         );
         if (!g) { log('NHL API: no game for', teamAbbrVal); return null; }
+        return parseNhlGame(g);
+    } catch (e) {
+        log('parseNhlScores error:', e.message);
+        return null;
+    }
+}
+
+// One game from the NHL /v1/score feed → the key's game object.
+function parseNhlGame(g) {
+    try {
 
         const awayId   = g.awayTeam?.abbrev || '???';
         const homeId   = g.homeTeam?.abbrev || '???';
@@ -685,12 +713,12 @@ function parseNhlScores(data, teamAbbrVal) {
         // Postponed / cancelled
         const schedState = (g.gameScheduleState || '').toUpperCase();
         if (schedState === 'PPD' || schedState === 'CNCL') {
-            return { state: 'ppd', matchup, awayId, homeId, awayAbbr, homeAbbr, link };
+            return { state: 'ppd', matchup, awayId, homeId, awayAbbr, homeAbbr, link, eventId: gameId };
         }
 
         // Pre-game / future
         if (state === 'FUT' || state === 'PRE') {
-            return { state: 'preview', matchup, time: fmtTime(g.startTimeUTC), awayId, homeId, awayAbbr, homeAbbr, link };
+            return { state: 'preview', matchup, time: fmtTime(g.startTimeUTC), awayId, homeId, awayAbbr, homeAbbr, link, eventId: gameId, startMs: Date.parse(g.startTimeUTC) };
         }
 
         const awayGoals = g.awayTeam?.score ?? 0;
@@ -699,7 +727,7 @@ function parseNhlScores(data, teamAbbrVal) {
         // Final
         if (state === 'FINAL' || state === 'OFF') {
             const endedIn = g.gameOutcome?.lastPeriodType || 'REG'; // 'REG', 'OT', 'SO'
-            return { state: 'final', matchup, awayId, homeId, awayAbbr, homeAbbr, awayGoals, homeGoals, endedIn, link };
+            return { state: 'final', matchup, awayId, homeId, awayAbbr, homeAbbr, awayGoals, homeGoals, endedIn, link, eventId: gameId };
         }
 
         // Live (LIVE or CRIT)
@@ -722,10 +750,10 @@ function parseNhlScores(data, teamAbbrVal) {
             count:    goals.length
         } : null;
 
-        return { state: 'live', matchup, awayId, homeId, awayAbbr, homeAbbr, awayGoals, homeGoals, period, periodStr, link, lastGoal };
+        return { state: 'live', matchup, awayId, homeId, awayAbbr, homeAbbr, awayGoals, homeGoals, period, periodStr, link, lastGoal, eventId: gameId };
 
     } catch (e) {
-        log('parseNhlScores error:', e.message);
+        log('parseNhlGame error:', e.message);
         return null;
     }
 }
@@ -877,16 +905,18 @@ function parseHockeyTechGame(g, league) {
     const link     = 'https://lscluster.hockeytech.com/game_reports/official-game-report.php' +
                       '?client_code=' + HOCKEYTECH[league].client_code + '&game_id=' + g.ID + '&lang_id=1';
 
-    const status = classifyHockeyTechStatus(g);
+    const status  = classifyHockeyTechStatus(g);
+    const eventId = String(g.ID);
+    const startMs = Date.parse(g.GameDateISO8601 || g.Date);
 
-    if (status.state === 'ppd') return { state: 'ppd', matchup, awayId, homeId, awayAbbr, homeAbbr, link };
+    if (status.state === 'ppd') return { state: 'ppd', matchup, awayId, homeId, awayAbbr, homeAbbr, link, eventId };
 
     if (status.state === 'preview' || status.state === 'nextgame') {
         const startISO = g.GameDateISO8601 || g.Date;
         const time     = g.ScheduledFormattedTime || fmtTime(startISO);
-        if (status.state === 'preview') return { state: 'preview', matchup, time, awayId, homeId, awayAbbr, homeAbbr, link };
+        if (status.state === 'preview') return { state: 'preview', matchup, time, awayId, homeId, awayAbbr, homeAbbr, link, eventId, startMs };
         const dateLabel = new Date(startISO).toLocaleDateString([], { month: 'numeric', day: 'numeric' });
-        return { state: 'nextgame', matchup, dateLabel, time, awayId, homeId, awayAbbr, homeAbbr, link };
+        return { state: 'nextgame', matchup, dateLabel, time, awayId, homeId, awayAbbr, homeAbbr, link, eventId, startMs };
     }
 
     const awayGoals = parseInt(g.VisitorGoals, 10) || 0;
@@ -895,7 +925,7 @@ function parseHockeyTechGame(g, league) {
     if (status.state === 'final') {
         const long    = (g.GameStatusStringLong || '').toUpperCase();
         const endedIn = long.includes('SO') ? 'SO' : long.includes('OT') ? 'OT' : 'REG';
-        return { state: 'final', matchup, awayId, homeId, awayAbbr, homeAbbr, awayGoals, homeGoals, endedIn, link };
+        return { state: 'final', matchup, awayId, homeId, awayAbbr, homeAbbr, awayGoals, homeGoals, endedIn, link, eventId };
     }
 
     // Live — the feed's own period naming (e.g. "3rd", "OT1") is already
@@ -906,7 +936,7 @@ function parseHockeyTechGame(g, league) {
                      : inInt               ? pLabel + ' INT'
                      : pLabel + ' ' + (g.GameClock || '');
 
-    return { state: 'live', matchup, awayId, homeId, awayAbbr, homeAbbr, awayGoals, homeGoals, period: parseInt(g.Period, 10) || 1, periodStr, link };
+    return { state: 'live', matchup, awayId, homeId, awayAbbr, homeAbbr, awayGoals, homeGoals, period: parseInt(g.Period, 10) || 1, periodStr, link, eventId };
 }
 
 // ── Live team lists (for the property inspector's search/browse UI) ───────────
@@ -1108,7 +1138,9 @@ async function playFireworks(context, winnerName, winnerColor) {
     } finally {
         flashing.delete(context);
         lastRender.delete(context);
-        refreshButton(context);
+        // A Scoreboard key redraws its slot; a team key refetches its game.
+        if (boardKeys.has(context)) renderBoardKey(context, boardSlotGame.get(context) || null);
+        else refreshButton(context);
     }
 }
 
@@ -1231,18 +1263,18 @@ async function playGoalLamp(context, lines, spacing, restColor = 'black', lampBg
     log('→ goal lamp');
     try {
         for (let i = 0; i < GOAL_LAMP_FRAMES; i++) {
-            if (!instances.has(context)) return; // key was removed mid-animation
+            if (!keyAlive(context)) return; // key was removed mid-animation
             ws.send(JSON.stringify({ event: 'setImage', context, payload: { image: makeGoalLamp(i, lampBg), target: 0 } }));
             await sleep(GOAL_LAMP_MS);
         }
-        if (card && instances.has(context)) {
+        if (card && keyAlive(context)) {
             // always black, even with a custom key background
             setButton(context, card, 1.3, 'black', true);
             await sleep(GOAL_LABEL_MS);
         }
     } finally {
         flashing.delete(context);
-        if (instances.has(context)) setButton(context, lines, spacing, restColor, true);
+        if (keyAlive(context)) setButton(context, lines, spacing, restColor, true);
     }
 }
 
@@ -1259,6 +1291,9 @@ function setButton(context, lines, lineSpacing, bgColor, force) {
     ws.send(JSON.stringify({ event: 'setImage', context, payload: { image: makeImage(lines, lineSpacing, bg.fill, bg.opacity), target: 0 } }));
 }
 
+// A key still on screen — team key or Scoreboard key.
+function keyAlive(context) { return instances.has(context) || boardKeys.has(context); }
+
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
 async function flashButton(context, color, lines, spacing, restColor = 'black') {
@@ -1268,7 +1303,7 @@ async function flashButton(context, color, lines, spacing, restColor = 'black') 
     try {
         // solid color, no text, 5 blinks (2.0 s)
         for (let i = 0; i < 5; i++) {
-            if (!instances.has(context)) return;
+            if (!keyAlive(context)) return;
             setButton(context, [''], spacing, color, true);
             await sleep(200);
             setButton(context, [''], spacing, restColor, true);
@@ -1278,4 +1313,281 @@ async function flashButton(context, color, lines, spacing, restColor = 'black') 
         flashing.delete(context);
         setButton(context, lines, spacing, restColor, true);
     }
+}
+
+
+// ══ Scoreboard action ═════════════════════════════════════════════════════════
+// A second action in this plugin: every key you drag on becomes one slot of a
+// board showing today's games for one league — NHL, AHL or ECHL — in start
+// time order. Same keys as the team action: goal lamp (or flash) + goal card,
+// fireworks at the final.
+//  • Each key stores its own settings, so different pages (or different
+//    blocks of keys on one page) can show different leagues. Keys on the same
+//    Stream Deck with the same settings form one board, filled in key order.
+//  • A settings change applies to the whole board the key belongs to: every
+//    Scoreboard key with the same settings that touches it (side or corner),
+//    and the keys touching those. Boards with different settings can sit
+//    side by side; two blocks with identical settings that touch are one board.
+//  • Each board can have its own custom key background color.
+//  • New keys start on the NHL.
+//  • "Today" rolls over at 2am, same as the team keys. On a day with no games
+//    the board shows the next game day's schedule, with the day on each key.
+//  • More games than keys → the last key shows "+N more" (opens the league's
+//    scores page). Extra keys show "No Game".
+//  • One request per league per refresh (cached 20s), shared by every board.
+const BOARD_ACTION = 'com.tj.livenhlscores.scoreboard';
+const BOARD_LEAGUES = {
+    nhl:  { label: 'NHL',  more: 'https://www.nhl.com/scores' },
+    ahl:  { label: 'AHL',  more: 'https://theahl.com/stats/daily-schedule' },
+    echl: { label: 'ECHL', more: 'https://echl.com/schedule' },
+};
+const BOARD_DEFAULTS = { league: 'nhl', sortOrder: 'column', finalsLast: false, goalLamp: true, bgColor: null, bgOpacity: 100 };
+
+const boardKeys       = new Map(); // context -> { device, coords, settings }
+const boardSlotGame   = new Map(); // context -> game currently in that slot
+let   boardOverflow   = new Set(); // contexts acting as "+N more"
+let   boardTimer      = null;
+let   boardRefreshing = false;
+let   boardDebounce   = null;
+
+function boardCfg(settings) {
+    const s = Object.assign({}, BOARD_DEFAULTS, settings || {});
+    if (!BOARD_LEAGUES[s.league]) s.league = BOARD_DEFAULTS.league;
+    s.sortOrder  = s.sortOrder === 'row' ? 'row' : 'column';
+    s.finalsLast = !!s.finalsLast;
+    s.goalLamp   = s.goalLamp !== false;
+    s.bgColor    = /^#[0-9a-fA-F]{6}$/.test(String(s.bgColor || '')) ? s.bgColor : null;
+    s.bgOpacity  = s.bgOpacity != null && !isNaN(Number(s.bgOpacity)) ? Number(s.bgOpacity) : 100;
+    return s;
+}
+const boardSig    = st => [st.league, st.sortOrder, st.finalsLast, st.goalLamp, st.bgColor || '', st.bgColor ? st.bgOpacity : ''].join('|');
+const boardKeyCfg = st => ({ teamAbbr: '', league: st.league, goalLamp: st.goalLamp, bgColor: st.bgColor, bgOpacity: st.bgOpacity });
+
+function clearKeyMemory(context) {
+    prevScores.delete(context); prevState.delete(context); goalHigh.delete(context);
+    lastRender.delete(context); currentGame.delete(context); flashing.delete(context);
+    gameFinalAt.delete(context); boardSlotGame.delete(context);
+}
+
+// The board a key belongs to: same device, same settings, connected through
+// touching keys (8 directions).
+function boardBlock(context) {
+    const start = boardKeys.get(context);
+    if (!start) return [context];
+    const sig = boardSig(start.settings), out = new Set([context]), queue = [context];
+    while (queue.length) {
+        const k = boardKeys.get(queue.shift());
+        for (const [ctx, o] of boardKeys) {
+            if (out.has(ctx) || o.device !== start.device || boardSig(o.settings) !== sig) continue;
+            if (Math.abs(o.coords.row - k.coords.row) <= 1 && Math.abs(o.coords.column - k.coords.column) <= 1) {
+                out.add(ctx); queue.push(ctx);
+            }
+        }
+    }
+    return [...out];
+}
+
+function handleBoardEvent({ event, context, payload, device }) {
+    switch (event) {
+        case 'willAppear': {
+            const raw      = (payload && payload.settings) || {};
+            const settings = boardCfg(raw);
+            const coords   = (payload && payload.coordinates) || { row: 0, column: 0 };
+            boardKeys.set(context, { device: device || '__unknown__', coords, settings });
+            if (!raw.league) ws.send(JSON.stringify({ event: 'setSettings', context, payload: settings }));
+            log('Scoreboard willAppear row=' + coords.row + ' col=' + coords.column + ' league=' + settings.league + ' keys=' + boardKeys.size);
+            if (boardDebounce) clearTimeout(boardDebounce);
+            boardDebounce = setTimeout(() => { boardDebounce = null; refreshBoard(); }, 300);
+            break;
+        }
+        case 'willDisappear':
+            boardKeys.delete(context);
+            boardOverflow.delete(context);
+            clearKeyMemory(context);
+            if (boardKeys.size === 0 && boardTimer) { clearTimeout(boardTimer); boardTimer = null; log('Scoreboard: no keys — timer stopped'); }
+            break;
+        case 'didReceiveSettings':
+        case 'sendToPlugin': {
+            const k = boardKeys.get(context);
+            const incoming = payload && payload.settings;
+            if (!k || !incoming) break;
+            const next = boardCfg(incoming);
+            if (boardSig(next) === boardSig(k.settings)) break; // our own setSettings echoing back
+            // Find this key's board using its OLD settings, then move the whole board.
+            const block = boardBlock(context);
+            log('Scoreboard settings → ' + boardSig(next) + ' for ' + block.length + ' key(s)');
+            for (const ctx of block) {
+                const o = boardKeys.get(ctx);
+                o.settings = next;
+                clearKeyMemory(ctx);
+                if (ctx !== context) ws.send(JSON.stringify({ event: 'setSettings', context: ctx, payload: next }));
+            }
+            refreshBoard();
+            break;
+        }
+        case 'keyUp': {
+            const k      = boardKeys.get(context);
+            const league = (k && k.settings.league) || 'nhl';
+            if (boardOverflow.has(context)) {
+                ws.send(JSON.stringify({ event: 'openUrl', payload: { url: BOARD_LEAGUES[league].more } }));
+                break;
+            }
+            const game = boardSlotGame.get(context);
+            if (game && game.link) { ws.send(JSON.stringify({ event: 'openUrl', payload: { url: game.link } })); break; }
+            // "No Game" key: refresh the board and open the league's scores page
+            refreshBoard();
+            ws.send(JSON.stringify({ event: 'openUrl', payload: { url: BOARD_LEAGUES[league].more } }));
+            break;
+        }
+    }
+}
+
+function sortBoardKeys(contexts, order) {
+    return contexts.sort((a, b) => {
+        const ca = boardKeys.get(a).coords, cb = boardKeys.get(b).coords;
+        if (order === 'row') return (ca.row - cb.row) || (ca.column - cb.column);
+        return (ca.column - cb.column) || (ca.row - cb.row);
+    });
+}
+
+// A future-day game on the board: the day goes on the key ("Tue 7:00 PM"),
+// or the date when it's a week or more out.
+function boardDayTime(startMs, time) {
+    if (!Number.isFinite(startMs)) return time;
+    const d = new Date(startMs);
+    const days = (startMs - Date.now()) / 86400000;
+    const day = days >= 6.5
+        ? d.toLocaleDateString([], { month: 'numeric', day: 'numeric' })
+        : d.toLocaleDateString([], { weekday: 'short' });
+    return day + ' ' + time;
+}
+
+// ── Today's games for one league (or the next game day's, if none today) ──────
+const boardDayCache = new Map(); // league -> { at, games }
+const BOARD_DAY_TTL_MS = 20_000;
+
+async function fetchBoardDay(league) {
+    const hit = boardDayCache.get(league);
+    if (hit && Date.now() - hit.at < BOARD_DAY_TTL_MS) return hit.games;
+    const games = league === 'nhl' ? await fetchNhlBoardDay() : await fetchHockeyTechBoardDay(league);
+    games.sort((a, b) => (a.startMs || 0) - (b.startMs || 0));
+    boardDayCache.set(league, { at: Date.now(), games });
+    return games;
+}
+
+async function fetchNhlBoardDay() {
+    const parseAll = (data, futureDay) => (data?.games || []).map(g => {
+        const game = parseNhlGame(g);
+        if (!game) return null;
+        game.startMs = Date.parse(g.startTimeUTC);
+        if (futureDay && game.state === 'preview') game.time = boardDayTime(game.startMs, game.time);
+        return game;
+    }).filter(Boolean);
+    let data = await httpsGetJson('https://api-web.nhle.com/v1/score/' + todayDateStr());
+    let games = parseAll(data, false);
+    // No games today: walk forward to the next game day (All-Star break,
+    // holidays, the gap before the playoffs) — a week's worth of hops at most.
+    for (let hops = 0; !games.length && data?.nextDate && hops < 7; hops++) {
+        data  = await httpsGetJson('https://api-web.nhle.com/v1/score/' + data.nextDate);
+        games = parseAll(data, true);
+    }
+    return games;
+}
+
+async function fetchHockeyTechBoardDay(league) {
+    const conf = HOCKEYTECH[league];
+    const base = 'https://lscluster.hockeytech.com/feed/index.php?feed=modulekit&view=scorebar' +
+        '&key=' + conf.key + '&client_code=' + conf.client_code + '&site_id=' + conf.site_id + '&lang=en&fmt=json';
+    const today = todayDateStr();
+    const data  = await httpsGetJson(base + '&numberofdaysback=1&numberofdaysahead=1');
+    let rows = (data?.SiteKit?.Scorebar || []).filter(g => (g.Date || '').slice(0, 10) === today);
+    let futureDay = false;
+    if (!rows.length) {
+        // No games today: the next date on the schedule within three weeks.
+        const ahead = await httpsGetJson(base + '&numberofdaysback=0&numberofdaysahead=21');
+        const future = (ahead?.SiteKit?.Scorebar || []).filter(g => (g.Date || '').slice(0, 10) > today);
+        const next = future.map(g => g.Date.slice(0, 10)).sort()[0];
+        rows = next ? future.filter(g => g.Date.slice(0, 10) === next) : [];
+        futureDay = true;
+    }
+    return rows.map(g => {
+        const game = parseHockeyTechGame(g, league);
+        if (game.state === 'nextgame' || (futureDay && game.state === 'preview')) {
+            game.state = 'preview';
+            game.time  = boardDayTime(game.startMs, fmtTime(g.GameDateISO8601 || g.Date));
+        }
+        return game;
+    });
+}
+
+function boardGameList(games, st) {
+    let list = games.slice();
+    if (st.finalsLast) list = [...list.filter(g => g.state !== 'final'), ...list.filter(g => g.state === 'final')];
+    return list;
+}
+
+function scheduleBoard() {
+    if (boardTimer) clearTimeout(boardTimer);
+    if (boardKeys.size === 0) { boardTimer = null; return; }
+    boardTimer = setTimeout(async () => { await refreshBoard(); }, 30_000);
+}
+
+async function refreshBoard() {
+    if (boardKeys.size === 0) return;
+    if (boardRefreshing) return;
+    boardRefreshing = true;
+    try {
+        // Boards = same device + same settings.
+        const boards = new Map();
+        for (const [ctx, k] of boardKeys) {
+            const id = k.device + '#' + boardSig(k.settings);
+            if (!boards.has(id)) boards.set(id, { settings: k.settings, keys: [] });
+            boards.get(id).keys.push(ctx);
+        }
+        // One fetch per league in use.
+        const leagues = [...new Set([...boards.values()].map(b => b.settings.league))];
+        const days = new Map();
+        await Promise.all(leagues.map(async lg => {
+            try { days.set(lg, await fetchBoardDay(lg)); }
+            catch (err) { log('Scoreboard fetch error (' + lg + '):', err.message); days.set(lg, null); }
+        }));
+
+        const overflow = new Set();
+        for (const b of boards.values()) {
+            const st     = b.settings, cfg = boardKeyCfg(st), day = days.get(st.league);
+            const sorted = sortBoardKeys(b.keys.slice(), st.sortOrder);
+            if (!day) { for (const ctx of sorted) if (!flashing.has(ctx)) setButton(ctx, [BOARD_LEAGUES[st.league].label, 'Err'], undefined, resolveBgColor(cfg)); continue; }
+            const games = boardGameList(day, st);
+            const over  = games.length > sorted.length;
+            const slots = over ? sorted.length - 1 : sorted.length;
+            for (let i = 0; i < slots; i++) renderBoardKey(sorted[i], games[i] || null, cfg);
+            if (over) {
+                const ctx = sorted[sorted.length - 1];
+                overflow.add(ctx);
+                clearKeyMemory(ctx);
+                setButton(ctx, [{ text: '+' + (games.length - slots), fs: 22, color: '#FFD700' }, { text: 'more', fs: 13, color: '#999999' }], 1.3, resolveBgColor(cfg));
+            }
+            log('Scoreboard ' + BOARD_LEAGUES[st.league].label + ': ' + games.length + ' games, ' + sorted.length + ' keys');
+        }
+        boardOverflow = overflow;
+    } catch (err) {
+        log('Scoreboard error:', err.message);
+        for (const ctx of boardKeys.keys()) if (!flashing.has(ctx)) setButton(ctx, ['NHL', 'Err']);
+    } finally {
+        boardRefreshing = false;
+        scheduleBoard();
+    }
+}
+
+function renderBoardKey(context, game, cfg) {
+    if (flashing.has(context)) return;
+    const k = boardKeys.get(context);
+    cfg = cfg || boardKeyCfg(k ? k.settings : boardCfg({}));
+    boardSlotGame.set(context, game);
+    if (!game) {
+        prevScores.delete(context); prevState.delete(context); goalHigh.delete(context);
+        setButton(context, ['No', 'Game'], undefined, resolveBgColor(cfg));   // matches the other Scoreboards
+        return;
+    }
+    presentGame(context, game, cfg);
 }
