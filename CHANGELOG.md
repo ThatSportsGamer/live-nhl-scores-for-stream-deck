@@ -2,6 +2,13 @@
 
 Full version history for Live NHL Scores, newest first. The [README](README.md) lists the three most recent updates.
 
+**v1.2.1.0**
+- Pregame keys are easier to read: the teams stack on two lines (away team on top, "@ home" below, with a small "@") and the day and time get their own lines. On game day the day line goes away and the start time is shown larger. Same on team keys and Scoreboard keys
+- Games a week or more out show the date on the day line ("Sat 10/24"), with the time underneath
+- Off-day keys show your team's next game the same way: the "Next Game" label is gone, and the day line reads the weekday ("Thursday"), or the date when it's a week or more away
+- AHL and ECHL start times now show in your own time zone, like NHL games (they used to show the arena's local time)
+- The Scoreboard's next-game-day keys (no games today) use the same layout
+
 **v1.2.0.0**
 - New: **Live NHL Scoreboard** action — drag it onto as many keys as you like and they fill with today's games, one game per key, in start-time order. Pick the league for each board: **NHL** (up to 16 keys), **AHL** (up to 16) or **ECHL** (up to 15)
 - Same keys as the team action: the goal lamp on the scoring team's color plus the goal card (NHL: EV / PPG / SHG / EN / PS +1; AHL/ECHL: GOAL +1), and fireworks at the final. The lamp can be turned off per board for a quick flash instead

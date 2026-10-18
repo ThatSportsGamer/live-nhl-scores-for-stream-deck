@@ -4,7 +4,7 @@
 
 A Stream Deck plugin that shows live hockey scores directly on your keys — **NHL, AHL, and ECHL**. Two actions: **Live NHL Scores** tracks one team per key, and **Live NHL Scoreboard** fills your keys with today's games for a league. Keys update automatically every 30 seconds.
 
-![Live NHL Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.2.0-green) [![Elgato Marketplace](https://img.shields.io/badge/Elgato-Marketplace-black)](https://marketplace.elgato.com/product/live-nhl-scores-b463d273-9e52-4062-bfba-c30089b0c677)
+![Live NHL Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.2.1-green) [![Elgato Marketplace](https://img.shields.io/badge/Elgato-Marketplace-black)](https://marketplace.elgato.com/product/live-nhl-scores-b463d273-9e52-4062-bfba-c30089b0c677)
 
 ---
 
@@ -14,7 +14,7 @@ A Stream Deck plugin that shows live hockey scores directly on your keys — **N
 - **Search by name or city** — type a team or location in the settings panel for instant results across all three leagues
 - **Browse by league and division** — or pick a league, then a division, then a team from the dropdowns
 - **Live scores** — shows away score, home score, and current period/time while a game is in progress
-- **Pre-game** — shows the matchup (e.g. `TOR @ BOS`) and scheduled start time
+- **Pre-game** — the two teams stacked (`TOR` over `@ BOS`) and the start time; on off days, your team's next game with its day and time
 - **Final scores** — shows the final score with a "Final", "Final/OT", or "Final/SO" label
 - **Goal lamp** — when either team scores, the key plays a few seconds of red goal light on the scoring team's color; for NHL games it's followed by a short card with the team and type of goal (e.g. WSH / PPG +1 — EV, PPG, SHG, EN, PS), and for AHL/ECHL games a GOAL +1 card (on by default; turn it off per key in settings to get a quick solid flash in the scoring team's primary color instead)
 - **Custom key background** — pick any color and opacity for the key background in settings
@@ -28,6 +28,13 @@ A Stream Deck plugin that shows live hockey scores directly on your keys — **N
 
 ## Recent Updates
 
+**v1.2.1.0**
+- Pregame keys are easier to read: the teams stack on two lines (away team on top, "@ home" below, with a small "@") and the day and time get their own lines. On game day the day line goes away and the start time is shown larger. Same on team keys and Scoreboard keys
+- Games a week or more out show the date on the day line ("Sat 10/24"), with the time underneath
+- Off-day keys show your team's next game the same way: the "Next Game" label is gone, and the day line reads the weekday ("Thursday"), or the date when it's a week or more away
+- AHL and ECHL start times now show in your own time zone, like NHL games (they used to show the arena's local time)
+- The Scoreboard's next-game-day keys (no games today) use the same layout
+
 **v1.2.0.0**
 - New: **Live NHL Scoreboard** action — drag it onto as many keys as you like and they fill with today's games, one game per key, in start-time order. Pick the league for each board: **NHL** (up to 16 keys), **AHL** (up to 16) or **ECHL** (up to 15)
 - Same keys as the team action: the goal lamp on the scoring team's color plus the goal card (NHL: EV / PPG / SHG / EN / PS +1; AHL/ECHL: GOAL +1), and fireworks at the final. The lamp can be turned off per board for a quick flash instead
@@ -40,11 +47,6 @@ A Stream Deck plugin that shows live hockey scores directly on your keys — **N
 - Goal card now matches the baseball and football cards: team on top, goal type + count in yellow — EV +1, PPG +1, SHG +1, EN +1, PS +1 (WSH / PPG +1)
 - AHL and ECHL keys now get a GOAL +1 card after the lamp too (that league feed doesn't say power play or shorthanded)
 - If the NHL's goal details haven't caught up yet, or one team scores twice between updates, the card shows GOAL +1 / GOAL +2 instead of being skipped
-
-**v1.1.15.0**
-- Goal lamp now glows over the scoring team's color (black if both teams scored in the same update), and the lamp fills more of the key — the GOAL text under it is gone
-- New: after the lamp on NHL games, a 3-second card shows the scoring team and the type of goal — POWER PLAY, SHORTHANDED, EMPTY NET or PENALTY SHOT in yellow (even-strength goals show just the team and GOAL). AHL and ECHL keys get the team-color lamp only
-- With the goal lamp turned off, the flash is now 5 solid blinks of the scoring team's color with no text, so it reads at a glance
 
 Older updates: see the full version history in [CHANGELOG.md](CHANGELOG.md).
 
@@ -93,10 +95,19 @@ That's it. The key will load your team's game within a few seconds and refresh e
 
 ![Live NHL Scores key states](assets/button-states.png)
 
-**Before the game:**
+**Before the game** (later in the week; the day is gray):
 ```
-TOR @ BOS
- 7:00 PM
+TOR
+@ BOS
+Thursday
+7:00 PM
+```
+
+**Game day:**
+```
+TOR
+@ BOS
+7:00 PM
 ```
 
 **Live game:**
@@ -127,11 +138,12 @@ BOS  1
 Final/OT
 ```
 
-**Off day:**
+**Off day** (your team's next game — the weekday, or the date when it's a week or more away):
 ```
-Next Game
-TOR @ BOS
- 10/2 7:00 PM
+TOR
+@ BOS
+Thursday
+7:00 PM
 ```
 
 ---
@@ -146,7 +158,7 @@ Each **Live NHL Scoreboard** key is one of today's games, in start-time order. T
 - **More games than keys:** the last key shows `+N more`. **More keys than games:** the extra keys show `No Game`. Pressing either opens the league's scores page
 - **Fill order:** top-to-bottom (default) or left-to-right. **Finals last:** optionally move finished games to the end
 - **Tip for smaller Stream Decks** (Mini, Neo, a 15-key MK.2): turn on finals last, so live and upcoming games keep their keys and finished games move to the `+N more` key.
-- **Day change:** the board keeps today's games until 2:00 AM, then moves to the next day. On a day with no games it shows the next game day's schedule (e.g. `Tue 7:00 PM`)
+- **Day change:** the board keeps today's games until 2:00 AM, then moves to the next day. On a day with no games it shows the next game day's schedule (each key shows the day and time on their own lines)
 - **Multiple boards:** each key remembers its own settings, so different pages can show different leagues, and boards can share a page too: give each its own background color to tell them apart. A settings change applies to the whole board the key is part of. New Scoreboard keys start on the NHL
 - **Multiple Stream Decks:** each deck (including a Virtual Stream Deck or Stream Deck Mobile) gets its own boards
 
