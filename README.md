@@ -4,7 +4,7 @@
 
 A Stream Deck plugin that shows live hockey scores directly on your keys — **NHL, AHL, and ECHL**. Two actions: **Live NHL Scores** tracks one team per key, and **Live NHL Scoreboard** fills your keys with today's games for a league. Keys update automatically every 30 seconds.
 
-![Live NHL Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.2.1-green) [![Elgato Marketplace](https://img.shields.io/badge/Elgato-Marketplace-black)](https://marketplace.elgato.com/product/live-nhl-scores-b463d273-9e52-4062-bfba-c30089b0c677)
+![Live NHL Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.2.2-green) [![Elgato Marketplace](https://img.shields.io/badge/Elgato-Marketplace-black)](https://marketplace.elgato.com/product/live-nhl-scores-b463d273-9e52-4062-bfba-c30089b0c677)
 
 ---
 
@@ -28,6 +28,12 @@ A Stream Deck plugin that shows live hockey scores directly on your keys — **N
 
 ## Recent Updates
 
+**v1.2.2.0**
+- Fixed: "today" is now read in Eastern time, which is how the NHL and AHL/ECHL date their games. Outside the US the keys could ask for tomorrow's slate while tonight's games were still on. The day now changes at 5:00 AM Eastern (2:00 AM Pacific), so late games and their finals stay on the keys overnight everywhere
+- Far fewer requests: all your team keys and Scoreboards now share each feed instead of every key asking on its own
+- If the NHL or AHL/ECHL feed stops responding for a moment, keys keep showing the last scores with a small amber dot instead of "Err" (after 10 minutes without an update they show "Err")
+- Requires Stream Deck 7.1 or later
+
 **v1.2.1.0**
 - Pregame keys are easier to read: the teams stack on two lines (away team on top, "@ home" below, with a small "@") and the day and time get their own lines. On game day the day line goes away and the start time is shown larger. Same on team keys and Scoreboard keys
 - Games a week or more out show the date on the day line ("Sat 10/24"), with the time underneath
@@ -43,11 +49,6 @@ A Stream Deck plugin that shows live hockey scores directly on your keys — **N
 - The board moves to the next day at 2:00 AM, same as the team keys. On a day with no games (All-Star break, holidays), it shows the next game day's schedule with the day on each key
 - Press a Scoreboard key to open that game's Gamecenter (AHL/ECHL: the official game report)
 
-**v1.1.16.0**
-- Goal card now matches the baseball and football cards: team on top, goal type + count in yellow — EV +1, PPG +1, SHG +1, EN +1, PS +1 (WSH / PPG +1)
-- AHL and ECHL keys now get a GOAL +1 card after the lamp too (that league feed doesn't say power play or shorthanded)
-- If the NHL's goal details haven't caught up yet, or one team scores twice between updates, the card shows GOAL +1 / GOAL +2 instead of being skipped
-
 Older updates: see the full version history in [CHANGELOG.md](CHANGELOG.md).
 
 ---
@@ -55,7 +56,7 @@ Older updates: see the full version history in [CHANGELOG.md](CHANGELOG.md).
 ## Requirements
 
 - [Elgato Stream Deck](https://www.elgato.com/stream-deck) hardware
-- [Stream Deck software](https://www.elgato.com/downloads) version 6.9 or later (Mac or Windows)
+- [Stream Deck software](https://www.elgato.com/downloads) version 7.1 or later (Mac or Windows)
 - No account required — the plugin uses each league's free public API
 
 ---
@@ -158,7 +159,7 @@ Each **Live NHL Scoreboard** key is one of today's games, in start-time order. T
 - **More games than keys:** the last key shows `+N more`. **More keys than games:** the extra keys show `No Game`. Pressing either opens the league's scores page
 - **Fill order:** top-to-bottom (default) or left-to-right. **Finals last:** optionally move finished games to the end
 - **Tip for smaller Stream Decks** (Mini, Neo, a 15-key MK.2): turn on finals last, so live and upcoming games keep their keys and finished games move to the `+N more` key.
-- **Day change:** the board keeps today's games until 2:00 AM, then moves to the next day. On a day with no games it shows the next game day's schedule (each key shows the day and time on their own lines)
+- **Day change:** the board keeps today's games until 5:00 AM Eastern (2:00 AM Pacific), then moves to the next day. On a day with no games it shows the next game day's schedule (each key shows the day and time on their own lines)
 - **Multiple boards:** each key remembers its own settings, so different pages can show different leagues, and boards can share a page too: give each its own background color to tell them apart. A settings change applies to the whole board the key is part of. New Scoreboard keys start on the NHL
 - **Multiple Stream Decks:** each deck (including a Virtual Stream Deck or Stream Deck Mobile) gets its own boards
 
@@ -170,7 +171,7 @@ Each **Live NHL Scoreboard** key is one of today's games, in start-time order. T
 
 NHL scores come from the [NHL's free public API](https://api-web.nhle.com). AHL and ECHL scores come from the HockeyTech/LeagueStat feed at `lscluster.hockeytech.com` — the same backend that powers theahl.com and echl.com. Both are polled once every 30 seconds per key. Scoreboard keys share one request per league per refresh, however many boards you set up. No API key or account is required for either. The plugin is fully self-contained — it uses only Node.js built-in modules and requires no external dependencies.
 
-The schedule holds on the current day's games until 2 AM local time (NHL) or within a rolling multi-day window (AHL/ECHL), so late-running games and off days stay sensible on the key.
+The schedule holds on the current day's games until 5 AM Eastern, i.e. 2 AM Pacific (NHL) or within a rolling multi-day window (AHL/ECHL), so late-running games and off days stay sensible on the key.
 
 ---
 

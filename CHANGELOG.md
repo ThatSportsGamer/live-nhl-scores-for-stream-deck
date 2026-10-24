@@ -2,6 +2,12 @@
 
 Full version history for Live NHL Scores, newest first. The [README](README.md) lists the three most recent updates.
 
+**v1.2.2.0**
+- Fixed: "today" is now read in Eastern time, which is how the NHL and AHL/ECHL date their games. Outside the US the keys could ask for tomorrow's slate while tonight's games were still on. The day now changes at 5:00 AM Eastern (2:00 AM Pacific), so late games and their finals stay on the keys overnight everywhere
+- Far fewer requests: all your team keys and Scoreboards now share each feed instead of every key asking on its own
+- If the NHL or AHL/ECHL feed stops responding for a moment, keys keep showing the last scores with a small amber dot instead of "Err" (after 10 minutes without an update they show "Err")
+- Requires Stream Deck 7.1 or later
+
 **v1.2.1.0**
 - Pregame keys are easier to read: the teams stack on two lines (away team on top, "@ home" below, with a small "@") and the day and time get their own lines. On game day the day line goes away and the start time is shown larger. Same on team keys and Scoreboard keys
 - Games a week or more out show the date on the day line ("Sat 10/24"), with the time underneath

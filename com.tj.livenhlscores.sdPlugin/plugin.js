@@ -18,10 +18,20 @@ const fs     = require('fs');
 const LOG_FILE = path.join(__dirname, 'plugin.log');
 try { fs.writeFileSync(LOG_FILE, `=== Hockey Plugin ${new Date().toISOString()} ===\nNode: ${process.version}\nArgs: ${process.argv.slice(2).join(' ')}\n`); } catch (e) { /* ignore */ }
 
+// plugin.log is only reset when the plugin starts, so on a deck that stays up
+// for days it would otherwise grow without limit (every poll logs a few lines).
+// Past LOG_MAX_BYTES it is truncated and starts over.
+const LOG_MAX_BYTES = 512 * 1024;
+let   logBytes      = 0;
+
 function log(...args) {
     const ts   = new Date().toISOString().slice(11, 19);
     const line = `[${ts}] ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')}\n`;
-    try { fs.appendFileSync(LOG_FILE, line); } catch (e) { /* ignore */ }
+    try {
+        if (logBytes > LOG_MAX_BYTES) { fs.writeFileSync(LOG_FILE, `=== log trimmed ${new Date().toISOString()} ===\n`); logBytes = 0; }
+        fs.appendFileSync(LOG_FILE, line);
+        logBytes += line.length;
+    } catch (e) { /* ignore */ }
 }
 
 process.on('uncaughtException',  err => log('CRASH:', err.stack || err.message));
@@ -334,6 +344,9 @@ async function refreshButton(context) {
     log('Refreshing', league, cfg.teamAbbr || cfg.teamId);
     try {
         const game = await fetchGame(league, cfg.teamId);
+        // The key may have left the screen while the request was in flight;
+        // presenting now would re-create its per-key memory for nothing.
+        if (!instances.has(context)) return;
         presentGame(context, game, cfg);
     } catch (err) {
         log('Fetch error:', err.message);
@@ -593,62 +606,117 @@ function fetchGame(league, teamId) {
     return fetchNhlGame(teamId);
 }
 
-// "Today", with a 2am local rollover so a late-running game doesn't drop off
-// the button at midnight. Shared by the NHL date-scoped fetch and the
-// HockeyTech preview/next-game classifier below.
+// "Today" as YYYY-MM-DD. The NHL's and HockeyTech's game dates are US Eastern
+// dates, so the date is read in America/New_York rather than from the host
+// clock — a viewer in London or Tokyo would otherwise ask for tomorrow's slate
+// while tonight's games were still on. The day rolls over at 5:00 AM Eastern
+// (= 2:00 AM Pacific, the old West Coast behavior), so a late-running game or
+// its final stays on the key well past midnight everywhere. Shared by the NHL
+// date-scoped fetch and the HockeyTech preview/next-game classifier below.
+const ET_ZONE   = 'America/New_York';
+const ET_FORMAT = new Intl.DateTimeFormat('en-US', {
+    timeZone: ET_ZONE, hourCycle: 'h23',
+    year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric',
+});
+const DAY_ROLLOVER_ET_HOUR = 5;
+
+function etParts(ms) {
+    const o = {};
+    for (const p of ET_FORMAT.formatToParts(new Date(ms))) o[p.type] = p.value;
+    return { year: +o.year, month: +o.month, day: +o.day };
+}
 function todayDateStr() {
-    const now = new Date();
-    if (now.getHours() < 2) now.setDate(now.getDate() - 1);
-    return now.getFullYear() + '-' +
-           String(now.getMonth() + 1).padStart(2, '0') + '-' +
-           String(now.getDate()).padStart(2, '0');
+    const p = etParts(Date.now() - DAY_ROLLOVER_ET_HOUR * 3600e3);
+    return p.year + '-' + String(p.month).padStart(2, '0') + '-' + String(p.day).padStart(2, '0');
+}
+
+// ── Shared fetch cache ────────────────────────────────────────────────────────
+// Every feed read goes through cachedJson(): one request per URL per TTL no
+// matter how many keys (team keys and Scoreboard keys alike) ask for it, and
+// keys that ask while the request is still in flight share its promise — so 16
+// keys starting together cost 1 request, not 16.
+//
+// If a feed stops answering, the last good response for that same URL keeps
+// driving the keys for up to STALE_MAX_MS instead of dropping every key to
+// "Err", and a small amber dot marks them as not live (isStale(), drawn by
+// setButton). Failures with nothing usable cached still reject, as before.
+const FETCH_TTL_MS = 20_000;
+const STALE_MAX_MS = 10 * 60_000;
+const jsonCache = new Map(); // url -> { at, promise }
+const jsonGood  = new Map(); // url -> { at, data }   last good response
+const jsonFails = new Map(); // url -> time it started failing (served stale since)
+
+function isStale() {
+    const now = Date.now();
+    for (const [u, t] of jsonFails) if (now - t > STALE_MAX_MS) jsonFails.delete(u);
+    return jsonFails.size > 0;
+}
+
+function cachedJson(url, ttlMs = FETCH_TTL_MS) {
+    const now = Date.now();
+    const hit = jsonCache.get(url);
+    if (hit && now - hit.at < ttlMs) return hit.promise;
+
+    // keep the maps bounded: dated URLs pile up over a long session
+    for (const [u, v] of jsonCache) if (now - v.at > STALE_MAX_MS) jsonCache.delete(u);
+    for (const [u, v] of jsonGood)  if (now - v.at > STALE_MAX_MS) jsonGood.delete(u);
+
+    const promise = httpsGetJson(url).then(data => {
+        jsonGood.set(url, { at: Date.now(), data });
+        if (jsonFails.delete(url)) log('Feed answering again — data live');
+        return data;
+    }, err => {
+        const good = jsonGood.get(url);
+        if (good && Date.now() - good.at < STALE_MAX_MS) {
+            if (!jsonFails.has(url)) { jsonFails.set(url, Date.now()); log('Feed failed — showing cached data:', err.message); }
+            return good.data;
+        }
+        if (jsonCache.get(url) && jsonCache.get(url).promise === promise) jsonCache.delete(url); // retry on the next poll
+        throw err;
+    });
+    jsonCache.set(url, { at: now, promise });
+    return promise;
 }
 
 // ── NHL API ───────────────────────────────────────────────────────────────────
-function fetchNhlGame(teamAbbrVal) {
-    return new Promise((resolve, reject) => {
-        const url = 'https://api-web.nhle.com/v1/score/' + todayDateStr();
-
-        const req = https.get(url, { headers: { 'User-Agent': 'StreamDeckHockeyScores/1.0' } }, res => {
-            let body = '';
-            res.on('data', chunk => body += chunk);
-            res.on('end', () => {
-                try {
-                    const game = parseNhlScores(JSON.parse(body), teamAbbrVal);
-                    if (game) return resolve(game);
-                    // Off day — look ahead instead of a dead-end "No Game"
-                    fetchNhlNextGame(teamAbbrVal).then(resolve).catch(() => resolve(null));
-                }
-                catch (e) { reject(e); }
-            });
-        });
-
-        req.on('error', reject);
-        req.setTimeout(10_000, () => { req.destroy(); reject(new Error('Request timed out')); });
-    });
+async function fetchNhlGame(teamAbbrVal) {
+    const data = await cachedJson('https://api-web.nhle.com/v1/score/' + todayDateStr());
+    const game = parseNhlScores(data, teamAbbrVal);
+    if (game) return game;
+    // Off day — look ahead instead of a dead-end "No Game"
+    try { return await fetchNhlNextGame(teamAbbrVal); } catch (e) { return null; }
 }
 
 // GET a URL as parsed JSON, following redirects (api-web.nhle.com uses a 307 to
 // resolve keywords like ".../now" to a concrete dated URL — plain https.get()
-// does not follow those on its own).
+// does not follow those on its own). The socket timeout only fires when the
+// connection goes quiet, so FETCH_DEADLINE_MS caps the whole request, and the
+// promise settles exactly once whichever way it ends.
+const FETCH_DEADLINE_MS = 20_000;
+
 function httpsGetJson(url, redirectsLeft = 3) {
     return new Promise((resolve, reject) => {
+        let settled = false, deadline = null;
+        const settle = (fn, value) => { if (settled) return; settled = true; clearTimeout(deadline); fn(value); };
+
         const req = https.get(url, { headers: { 'User-Agent': 'StreamDeckHockeyScores/1.0' } }, res => {
             if ([301, 302, 307, 308].includes(res.statusCode) && res.headers.location && redirectsLeft > 0) {
                 res.resume();
-                httpsGetJson(res.headers.location, redirectsLeft - 1).then(resolve).catch(reject);
+                httpsGetJson(res.headers.location, redirectsLeft - 1).then(v => settle(resolve, v), e => settle(reject, e));
                 return;
             }
             let body = '';
             res.on('data', chunk => body += chunk);
+            res.on('error', e => settle(reject, e));
             res.on('end', () => {
-                try { resolve(JSON.parse(body)); }
-                catch (e) { reject(e); }
+                try { settle(resolve, JSON.parse(body)); }
+                catch (e) { settle(reject, e); }
             });
         });
 
-        req.on('error', reject);
-        req.setTimeout(10_000, () => { req.destroy(); reject(new Error('Request timed out')); });
+        deadline = setTimeout(() => { req.destroy(); settle(reject, new Error('Request timed out')); }, FETCH_DEADLINE_MS);
+        req.on('error', e => settle(reject, e));
+        req.setTimeout(10_000, () => { req.destroy(); settle(reject, new Error('Request timed out')); });
     });
 }
 
@@ -656,9 +724,10 @@ function httpsGetJson(url, redirectsLeft = 3) {
 // The club-schedule "week" view returns a rolling window starting today; chase
 // nextStartDate forward a few times to cover gaps longer than a week (All-Star
 // break, playoff layoffs) without walking arbitrarily far into the off-season.
+const NEXT_GAME_TTL_MS = 5 * 60_000; // off-day lookups: the schedule rarely changes, so don't ask every 30 s per key
 async function fetchNhlNextGame(teamAbbrVal, weekStart = 'now', hopsLeft = 4) {
     const url  = 'https://api-web.nhle.com/v1/club-schedule/' + teamAbbrVal + '/week/' + weekStart;
-    const data = await httpsGetJson(url);
+    const data = await cachedJson(url, NEXT_GAME_TTL_MS);
 
     const games = (data?.games || []).slice().sort((a, b) => new Date(a.startTimeUTC) - new Date(b.startTimeUTC));
     const g     = games.find(g => g.gameState === 'FUT' || g.gameState === 'PRE');
@@ -766,14 +835,20 @@ function buildNhlGameUrl(awayAbbr, homeAbbr, gameDate, gameId) {
 }
 
 // ── AHL / ECHL — HockeyTech API ────────────────────────────────────────────────
-async function fetchHockeyTechGame(league, teamId) {
+// One URL shape per window, so team keys and the Scoreboard share requests.
+function hockeyTechUrl(league, back, ahead) {
     const conf = HOCKEYTECH[league];
-    const url  = 'https://lscluster.hockeytech.com/feed/index.php' +
-        '?feed=modulekit&view=scorebar&numberofdaysback=3&numberofdaysahead=3' +
+    return 'https://lscluster.hockeytech.com/feed/index.php' +
+        '?feed=modulekit&view=scorebar&numberofdaysback=' + back + '&numberofdaysahead=' + ahead +
         '&key=' + conf.key + '&client_code=' + conf.client_code + '&site_id=' + conf.site_id +
         '&lang=en&fmt=json';
+}
 
-    const data = await httpsGetJson(url);
+async function fetchHockeyTechGame(league, teamId) {
+    const conf = HOCKEYTECH[league];
+    const url  = hockeyTechUrl(league, 3, 3);
+
+    const data = await cachedJson(url);
     const game = parseHockeyTechScores(data, league, teamId);
     if (game) return game;
 
@@ -788,12 +863,9 @@ async function fetchHockeyTechGame(league, teamId) {
 // call above already came back empty for this team.
 async function fetchHockeyTechNextGame(league, teamId) {
     const conf = HOCKEYTECH[league];
-    const url  = 'https://lscluster.hockeytech.com/feed/index.php' +
-        '?feed=modulekit&view=scorebar&numberofdaysback=0&numberofdaysahead=21' +
-        '&key=' + conf.key + '&client_code=' + conf.client_code + '&site_id=' + conf.site_id +
-        '&lang=en&fmt=json';
+    const url  = hockeyTechUrl(league, 0, 21);
 
-    const data  = await httpsGetJson(url);
+    const data  = await cachedJson(url, NEXT_GAME_TTL_MS);
     const games = data?.SiteKit?.Scorebar || [];
     const matches = games
         .filter(g => String(g.HomeID) === String(teamId) || String(g.VisitorID) === String(teamId))
@@ -1126,7 +1198,7 @@ function preHomeLineSvg(y, fs, item, color) {
            `<text y="${(y - lift).toFixed(2)}" ${attrs}><tspan font-size="${item.afs}">${pre}</tspan><tspan fill="none">${home}</tspan></text>`;
 }
 
-function makeImage(lines, lineSpacing = 1.4, bgColor = 'black', bgOpacity = 1) {
+function makeImage(lines, lineSpacing = 1.4, bgColor = 'black', bgOpacity = 1, stale = false) {
     const W = 72, H = 72, PAD = 4, MAX_W = W - PAD * 2;
 
     const items = lines.map(l => {
@@ -1152,7 +1224,7 @@ function makeImage(lines, lineSpacing = 1.4, bgColor = 'black', bgOpacity = 1) {
     const svg =
         `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="144" height="144" overflow="hidden">` +
         `<rect width="${W}" height="${H}" fill="${bgColor}" fill-opacity="${bgOpacity}"/>` +
-        rows + `</svg>`;
+        rows + (stale ? `<circle cx="65" cy="7" r="3.2" fill="#FFB020"/>` : '') + `</svg>`;
 
     return 'data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64');
 }
@@ -1211,6 +1283,7 @@ async function playFireworks(context, winnerName, winnerColor) {
     } finally {
         flashing.delete(context);
         lastRender.delete(context);
+        if (!keyAlive(context)) return; // key left the screen mid-animation — nothing to redraw
         // A Scoreboard key redraws its slot; a team key refetches its game.
         if (boardKeys.has(context)) renderBoardKey(context, boardSlotGame.get(context) || null);
         else refreshButton(context);
@@ -1356,12 +1429,13 @@ async function playGoalLamp(context, lines, spacing, restColor = 'black', lampBg
 // latter here so makeImage always gets a fill string + numeric opacity.
 function setButton(context, lines, lineSpacing, bgColor, force) {
     const bg = (bgColor && typeof bgColor === 'object') ? bgColor : { fill: bgColor || 'black', opacity: 1 };
-    const key = JSON.stringify({ lines, bg });
+    const stale = isStale();
+    const key = JSON.stringify({ lines, bg, stale });
     if (!force) {
         if (lastRender.get(context) === key) return; // skip if unchanged
         lastRender.set(context, key);
     }
-    ws.send(JSON.stringify({ event: 'setImage', context, payload: { image: makeImage(lines, lineSpacing, bg.fill, bg.opacity), target: 0 } }));
+    ws.send(JSON.stringify({ event: 'setImage', context, payload: { image: makeImage(lines, lineSpacing, bg.fill, bg.opacity, stale), target: 0 } }));
 }
 
 // A key still on screen — team key or Scoreboard key.
@@ -1384,7 +1458,7 @@ async function flashButton(context, color, lines, spacing, restColor = 'black') 
         }
     } finally {
         flashing.delete(context);
-        setButton(context, lines, spacing, restColor, true);
+        if (keyAlive(context)) setButton(context, lines, spacing, restColor, true);
     }
 }
 
@@ -1544,28 +1618,27 @@ async function fetchNhlBoardDay() {
         game.startMs = Date.parse(g.startTimeUTC);
         return game;
     }).filter(Boolean);
-    let data = await httpsGetJson('https://api-web.nhle.com/v1/score/' + todayDateStr());
+    let data = await cachedJson('https://api-web.nhle.com/v1/score/' + todayDateStr());
     let games = parseAll(data, false);
     // No games today: walk forward to the next game day (All-Star break,
     // holidays, the gap before the playoffs) — a week's worth of hops at most.
     for (let hops = 0; !games.length && data?.nextDate && hops < 7; hops++) {
-        data  = await httpsGetJson('https://api-web.nhle.com/v1/score/' + data.nextDate);
+        data  = await cachedJson('https://api-web.nhle.com/v1/score/' + data.nextDate);
         games = parseAll(data, true);
     }
     return games;
 }
 
 async function fetchHockeyTechBoardDay(league) {
-    const conf = HOCKEYTECH[league];
-    const base = 'https://lscluster.hockeytech.com/feed/index.php?feed=modulekit&view=scorebar' +
-        '&key=' + conf.key + '&client_code=' + conf.client_code + '&site_id=' + conf.site_id + '&lang=en&fmt=json';
     const today = todayDateStr();
-    const data  = await httpsGetJson(base + '&numberofdaysback=1&numberofdaysahead=1');
+    // same ±3 day window the team keys ask for (rows are filtered to today
+    // below), so a board and team keys on the same league share one request
+    const data  = await cachedJson(hockeyTechUrl(league, 3, 3));
     let rows = (data?.SiteKit?.Scorebar || []).filter(g => (g.Date || '').slice(0, 10) === today);
     let futureDay = false;
     if (!rows.length) {
         // No games today: the next date on the schedule within three weeks.
-        const ahead = await httpsGetJson(base + '&numberofdaysback=0&numberofdaysahead=21');
+        const ahead = await cachedJson(hockeyTechUrl(league, 0, 21), NEXT_GAME_TTL_MS);
         const future = (ahead?.SiteKit?.Scorebar || []).filter(g => (g.Date || '').slice(0, 10) > today);
         const next = future.map(g => g.Date.slice(0, 10)).sort()[0];
         rows = next ? future.filter(g => g.Date.slice(0, 10) === next) : [];
