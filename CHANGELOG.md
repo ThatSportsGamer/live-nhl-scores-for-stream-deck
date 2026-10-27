@@ -2,6 +2,11 @@
 
 Full version history for Live NHL Scores, newest first. The [README](README.md) lists the three most recent updates.
 
+**v1.2.3.0**
+- Fixed: adding a new Scoreboard key next to an existing board no longer copies that board's league. New Scoreboard keys start with "Select A League", and changing one key only changes that key (keys placed side by side with the same settings still move together)
+- The Scoreboard settings panel now tells you how many keys are in the board you're editing, since changing a setting changes all of them (leave a gap between boards to keep them separate)
+- Team search now lists the best matches first: an exact abbreviation (try "BOS" or "NY"), then names that start with what you typed, then names that contain it
+
 **v1.2.2.0**
 - Fixed: "today" is now read in Eastern time, which is how the NHL and AHL/ECHL date their games. Outside the US the keys could ask for tomorrow's slate while tonight's games were still on. The day now changes at 5:00 AM Eastern (2:00 AM Pacific), so late games and their finals stay on the keys overnight everywhere
 - Far fewer requests: all your team keys and Scoreboards now share each feed instead of every key asking on its own
