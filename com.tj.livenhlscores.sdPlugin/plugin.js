@@ -294,7 +294,7 @@ function scheduleFallbackUrl(league, teamId) {
 }
 
 // Same pattern as the MLB/MiLB/CFB plugins' Custom Link option: Gamecenter (or
-// the AHL/ECHL game report) until the game actually starts, then the user's own
+// the AHL/ECHL game report, or the PWHL Game Center) until the game actually starts, then the user's own
 // link — e.g. a regional sports network's live-game page — through the final
 // and for 30 minutes after it, then back to Gamecenter for the recap. Falls
 // back to the normal link if no custom URL is configured yet, or if the game
@@ -862,6 +862,15 @@ function hockeyTechUrl(league, back, ahead) {
         '&lang=en&fmt=json';
 }
 
+// Where a key press goes for one AHL/ECHL/PWHL game. The PWHL's own site has a
+// Game Center keyed by the same HockeyTech game id; AHL/ECHL keep the official
+// game report.
+function hockeyTechGameUrl(league, gameId) {
+    if (league === 'pwhl') return 'https://www.thepwhl.com/en/stats/game-center/' + gameId;
+    return 'https://lscluster.hockeytech.com/game_reports/official-game-report.php' +
+        '?client_code=' + HOCKEYTECH[league].client_code + '&game_id=' + gameId + '&lang_id=1';
+}
+
 async function fetchHockeyTechGame(league, teamId) {
     const conf = HOCKEYTECH[league];
     const url  = hockeyTechUrl(league, 3, 3);
@@ -898,8 +907,7 @@ async function fetchHockeyTechNextGame(league, teamId) {
     const awayAbbr  = g.VisitorCode || teamAbbr(league, awayId);
     const homeAbbr  = g.HomeCode    || teamAbbr(league, homeId);
     const matchup   = awayAbbr + ' @ ' + homeAbbr;
-    const link      = 'https://lscluster.hockeytech.com/game_reports/official-game-report.php' +
-                       '?client_code=' + conf.client_code + '&game_id=' + g.ID + '&lang_id=1';
+    const link      = hockeyTechGameUrl(league, g.ID);
     const startISO  = g.GameDateISO8601 || g.Date;
 
     return { state: 'nextgame', matchup, startIso: startISO, time: fmtTime(startISO), awayId, homeId, awayAbbr, homeAbbr, link };
@@ -990,8 +998,7 @@ function parseHockeyTechGame(g, league) {
     const awayAbbr = g.VisitorCode || teamAbbr(league, awayId);
     const homeAbbr = g.HomeCode    || teamAbbr(league, homeId);
     const matchup  = awayAbbr + ' @ ' + homeAbbr;
-    const link     = 'https://lscluster.hockeytech.com/game_reports/official-game-report.php' +
-                      '?client_code=' + HOCKEYTECH[league].client_code + '&game_id=' + g.ID + '&lang_id=1';
+    const link     = hockeyTechGameUrl(league, g.ID);
 
     const status  = classifyHockeyTechStatus(g);
     const eventId = String(g.ID);

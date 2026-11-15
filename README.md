@@ -29,7 +29,7 @@ A Stream Deck plugin that shows live hockey scores directly on your keys — **N
 ## Recent Updates
 
 **v1.3.0.0**
-- New: the **PWHL**. All 12 teams for 2026-27 are in, including the four new ones (Detroit Clutch, Hamilton Havoc, San Jose Sea Lions, Vegas Vanguards). Track a team on its own key or pick PWHL for a Scoreboard (up to 6 keys). Goals get the goal lamp and a GOAL +1 card, finals get fireworks, and a key press opens the official game report
+- New: the **PWHL**. All 12 teams for 2026-27 are in, including the four new ones (Detroit Clutch, Hamilton Havoc, San Jose Sea Lions, Vegas Vanguards). Track a team on its own key or pick PWHL for a Scoreboard (up to 6 keys). Goals get the goal lamp and a GOAL +1 card, finals get fireworks, and a key press opens the game's page on thepwhl.com
 - Team search and the league dropdown include the PWHL, with teams grouped by East and West
 - Shorter settings panels (the details are in the README), and the Scoreboard board hint is fixed: it now says how many touching keys a change applies to
 

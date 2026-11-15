@@ -283,7 +283,7 @@
 <div class="field" style="margin-top: 16px;">
     <label for="linkType">Key Press Opens</label>
     <select id="linkType">
-        <option value="gamecenter">NHL.com Gamecenter (free)</option>
+        <option value="gamecenter" id="gamecenterOption">NHL.com Gamecenter (free)</option>
         <option value="custom">Custom Link</option>
     </select>
 </div>
@@ -731,7 +731,20 @@
         saveSettings();
     }
 
+    // The default key-press link depends on the league: NHL.com Gamecenter,
+    // the AHL/ECHL official game report, or the PWHL's own Game Center.
+    var GAMECENTER_LABEL = {
+        nhl:  'NHL.com Gamecenter (free)',
+        ahl:  'AHL Game Report (free)',
+        echl: 'ECHL Game Report (free)',
+        pwhl: 'PWHL Game Center (free)'
+    };
+    function updateGamecenterLabel(league) {
+        document.getElementById('gamecenterOption').textContent = GAMECENTER_LABEL[league] || GAMECENTER_LABEL.nhl;
+    }
+
     function showSelectedTeamBanner(name, league) {
+        if (league) updateGamecenterLabel(league);
         var infoEl = document.getElementById('selectedTeamInfo');
         var nameEl = document.getElementById('selectedTeamName');
         if (name) {
@@ -898,6 +911,7 @@
 
     // ── Dropdown change handlers ───────────────────────────────────────────────
     document.getElementById('leagueSelect').addEventListener('change', function() {
+        updateGamecenterLabel(this.value);
         savedTeamId = null;
         searchBox.value = '';
         renderDivisionSelect();
