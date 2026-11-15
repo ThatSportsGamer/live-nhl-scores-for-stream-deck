@@ -1,6 +1,6 @@
 /**
  * Live Hockey Scores — Stream Deck Plugin
- * Covers NHL, AHL, and ECHL.
+ * Covers NHL, AHL, ECHL, and PWHL.
  * Uses Node.js built-in modules only (net, https, crypto).
  * No npm packages required.
  */
@@ -284,6 +284,7 @@ const NHL_SLUG_OVERRIDES = { UTA: 'utah' };
 function scheduleFallbackUrl(league, teamId) {
     if (league === 'ahl')  return 'https://theahl.com/stats/schedule';
     if (league === 'echl') return 'https://echl.com/schedule';
+    if (league === 'pwhl') return 'https://www.thepwhl.com/en/schedule';
     const team = teamId && TEAMS.nhl[teamId];
     if (team) {
         const slug = NHL_SLUG_OVERRIDES[teamId] || team.name.toLowerCase().replace(/[^a-z]/g, '');
@@ -471,20 +472,21 @@ function buildLines(game, cfg) {
 }
 
 // ── League config ──────────────────────────────────────────────────────────────
-// AHL / ECHL run on the HockeyTech/LeagueStat platform (lscluster.hockeytech.com) —
-// the same backend that powers theahl.com and echl.com. The key + client_code below
+// AHL / ECHL / PWHL run on the HockeyTech/LeagueStat platform (lscluster.hockeytech.com) —
+// the same backend that powers theahl.com, echl.com and thepwhl.com. The key + client_code below
 // were captured from those sites' own public network traffic (same undocumented,
 // no-signup access model as the NHL's api-web.nhle.com). They could rotate without
-// notice; if scores stop loading for AHL/ECHL, that's the first thing to re-check.
+// notice; if scores stop loading for AHL/ECHL/PWHL, that's the first thing to re-check.
 const HOCKEYTECH = {
     ahl:  { key: 'ccb91f29d6744675', client_code: 'ahl',  site_id: '3' },
     echl: { key: '2c2b89ea7345cae8', client_code: 'echl', site_id: '0' },
+    pwhl: { key: '446521baf8c38984', client_code: 'pwhl', site_id: '0' },
 };
 
 // ── Team data (id → name, division, primary color) ────────────────────────────
 // NHL is keyed by team abbreviation (matches api-web.nhle.com).
-// AHL / ECHL are keyed by numeric HockeyTech team id (matches lscluster.hockeytech.com).
-// AHL/ECHL colors are best-effort approximations of real team branding (the
+// AHL / ECHL / PWHL are keyed by numeric HockeyTech team id (matches lscluster.hockeytech.com).
+// AHL/ECHL/PWHL colors are best-effort approximations of real team branding (the
 // HockeyTech feed doesn't provide hex colors) — safe to refine later.
 const TEAMS = {
     nhl: {
@@ -587,13 +589,29 @@ const TEAMS = {
         '102': { abbr: 'SAV', name: 'Ghost Pirates',   color: '#00A99D' },
         '18':  { abbr: 'SC',  name: 'Stingrays',       color: '#002F6C' },
     },
+    // PWHL: conf is the conference (the feed puts every team in one "PWHL"
+    // division, so the settings panel's East/West grouping comes from here).
+    pwhl: {
+        '1':  { abbr: 'BOS', name: 'Fleet',      conf: 'East', color: '#1F5C47' },
+        '11': { abbr: 'HAM', name: 'Havoc',      conf: 'East', color: '#E35205' },
+        '3':  { abbr: 'MTL', name: 'Victoire',   conf: 'East', color: '#862633' },
+        '4':  { abbr: 'NY',  name: 'Sirens',     conf: 'East', color: '#00788C' },
+        '5':  { abbr: 'OTT', name: 'Charge',     conf: 'East', color: '#C8102E' },
+        '6':  { abbr: 'TOR', name: 'Sceptres',   conf: 'East', color: '#307FE2' },
+        '10': { abbr: 'DET', name: 'Clutch',     conf: 'West', color: '#0C2340' },
+        '12': { abbr: 'VGS', name: 'Vanguards',  conf: 'West', color: '#B4975A' },
+        '2':  { abbr: 'MIN', name: 'Frost',      conf: 'West', color: '#5E2D91' },
+        '13': { abbr: 'SJ',  name: 'Sea Lions',  conf: 'West', color: '#006D75' },
+        '8':  { abbr: 'SEA', name: 'Torrent',    conf: 'West', color: '#00575C' },
+        '9':  { abbr: 'VAN', name: 'Goldeneyes', conf: 'West', color: '#C99A2E' },
+    },
 };
 
 const teamColor = (league, id) => TEAMS[league]?.[id]?.color || '#FFFFFF';
 const teamName  = (league, id) => TEAMS[league]?.[id]?.name  || (id || '');
 const teamAbbr  = (league, id) => TEAMS[league]?.[id]?.abbr  || String(id || '???');
 
-// ── Period label (NHL only — AHL/ECHL use the feed's own period names) ────────
+// ── Period label (NHL only — AHL/ECHL/PWHL use the feed's own period names) ────────
 function periodLabel(period) {
     if (period === 4) return 'OT';
     if (period >= 5)  return 'SO';
@@ -602,7 +620,7 @@ function periodLabel(period) {
 
 // ── Fetch dispatcher ──────────────────────────────────────────────────────────
 function fetchGame(league, teamId) {
-    if (league === 'ahl' || league === 'echl') return fetchHockeyTechGame(league, teamId);
+    if (HOCKEYTECH[league]) return fetchHockeyTechGame(league, teamId);
     return fetchNhlGame(teamId);
 }
 
@@ -834,7 +852,7 @@ function buildNhlGameUrl(awayAbbr, homeAbbr, gameDate, gameId) {
     return `https://www.nhl.com/gamecenter/${away}-vs-${home}/${date}/${gameId}`;
 }
 
-// ── AHL / ECHL — HockeyTech API ────────────────────────────────────────────────
+// ── AHL / ECHL / PWHL — HockeyTech API ────────────────────────────────────────────────
 // One URL shape per window, so team keys and the Scoreboard share requests.
 function hockeyTechUrl(league, back, ahead) {
     const conf = HOCKEYTECH[league];
@@ -1069,27 +1087,29 @@ async function fetchHockeyTechTeamList(league) {
         '&site_id=' + conf.site_id + '&lang=en&fmt=json';
     const data = await httpsGetJson(url);
     return (data?.SiteKit?.Teamsbyseason || [])
-        .map(t => ({ value: String(t.id), abbr: t.code, name: t.name, division: t.division_short_name }))
+        .map(t => ({ value: String(t.id), abbr: t.code, name: t.name, division: TEAMS[league]?.[String(t.id)]?.conf || t.division_short_name }))
         .filter(t => t.value && t.abbr && t.name)
         .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-// Fetches all 3 leagues' live team lists (each independently — one league
+// Fetches all 4 leagues' live team lists (each independently — one league
 // failing doesn't block the others) and relays them to the property inspector
 // that asked for them.
 async function sendLiveTeams(context) {
-    const [nhl, ahl, echl] = await Promise.all([
+    const [nhl, ahl, echl, pwhl] = await Promise.all([
         getLiveTeamList('nhl').catch(e  => { log('nhl team list error:', e.message);  return null; }),
         getLiveTeamList('ahl').catch(e  => { log('ahl team list error:', e.message);  return null; }),
         getLiveTeamList('echl').catch(e => { log('echl team list error:', e.message); return null; }),
+        getLiveTeamList('pwhl').catch(e => { log('pwhl team list error:', e.message); return null; }),
     ]);
 
     const teams = {};
     if (nhl)  teams.nhl  = nhl;
     if (ahl)  teams.ahl  = ahl;
     if (echl) teams.echl = echl;
+    if (pwhl) teams.pwhl = pwhl;
 
-    if (!Object.keys(teams).length) { log('sendLiveTeams: all 3 leagues failed, PI keeps its static fallback'); return; }
+    if (!Object.keys(teams).length) { log('sendLiveTeams: all 4 leagues failed, PI keeps its static fallback'); return; }
 
     log('Sending live team data to PI:', Object.keys(teams).map(l => l + '=' + teams[l].length).join(', '));
     ws.send(JSON.stringify({ event: 'sendToPropertyInspector', context, payload: { event: 'teamsData', teams } }));
@@ -1376,7 +1396,7 @@ function goalLampEnabled(cfg) { return !cfg || cfg.goalLamp !== false; }
 // matching the baseball and football cards. NHL types come from the latest
 // entry in goals[]: PS / AWD / EN take priority, then PPG / SHG / EV from the
 // strength (own goals just show their strength — "OWN" would read as the
-// credited team scoring on itself). AHL/ECHL (no strength in that feed), two
+// credited team scoring on itself). AHL/ECHL/PWHL (no strength in that feed), two
 // goals by one team in one poll, or an NHL goals[] list that hasn't caught up
 // to the score all fall back to "GOAL +n".
 const GOAL_LABEL_MS = 3000;
@@ -1465,7 +1485,7 @@ async function flashButton(context, color, lines, spacing, restColor = 'black') 
 
 // ══ Scoreboard action ═════════════════════════════════════════════════════════
 // A second action in this plugin: every key you drag on becomes one slot of a
-// board showing today's games for one league — NHL, AHL or ECHL — in start
+// board showing today's games for one league — NHL, AHL, ECHL or PWHL — in start
 // time order. Same keys as the team action: goal lamp (or flash) + goal card,
 // fireworks at the final.
 //  • Each key stores its own settings, so different pages (or different
@@ -1487,6 +1507,7 @@ const BOARD_LEAGUES = {
     nhl:  { label: 'NHL',  more: 'https://www.nhl.com/scores' },
     ahl:  { label: 'AHL',  more: 'https://theahl.com/stats/daily-schedule' },
     echl: { label: 'ECHL', more: 'https://echl.com/schedule' },
+    pwhl: { label: 'PWHL', more: 'https://www.thepwhl.com/en/schedule' },
 };
 const BOARD_DEFAULTS = { league: 'nhl', sortOrder: 'column', finalsLast: false, goalLamp: true, bgColor: null, bgOpacity: 100 };
 

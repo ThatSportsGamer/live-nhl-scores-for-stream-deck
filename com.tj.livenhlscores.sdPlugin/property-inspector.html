@@ -244,7 +244,7 @@
 <div class="field">
     <label for="searchBox">Search — any team, any league</label>
     <div class="search-wrap">
-        <input type="text" id="searchBox" placeholder="e.g. Bruins, BOS, Charlotte, Everblades…" autocomplete="off"/>
+        <input type="text" id="searchBox" placeholder="e.g. Bruins, BOS, Charlotte, Everblades, Frost…" autocomplete="off"/>
         <div class="autocomplete-list" id="autocompleteList"></div>
     </div>
 </div>
@@ -258,6 +258,7 @@
         <option value="nhl">NHL</option>
         <option value="ahl">AHL</option>
         <option value="echl">ECHL</option>
+        <option value="pwhl">PWHL</option>
     </select>
 </div>
 
@@ -313,7 +314,7 @@
         <input type="checkbox" id="goalLampEnabled" checked/>
         <label for="goalLampEnabled">Flash the goal lamp when a goal is scored</label>
     </div>
-    <div class="bg-hint">Plays a few seconds of red goal light on the scoring team's color whenever either team scores, then a short card with the team and type of goal (e.g. PPG +1; AHL/ECHL show GOAL +1). Turn it off to get a quick solid flash in the scoring team's color instead.</div>
+    <div class="bg-hint">Plays a few seconds of red goal light on the scoring team's color whenever either team scores, then a short card with the team and type of goal (e.g. PPG +1; AHL/ECHL/PWHL show GOAL +1). Turn it off to get a quick solid flash in the scoring team's color instead.</div>
 </div>
 
 <div class="info-box">
@@ -324,7 +325,7 @@
     • Shows score + period/time during live games<br>
     • Shows matchup and start time before the game<br>
     • Shows Final / Final/OT / Final/SO when the game ends<br>
-    • Covers NHL, AHL, and ECHL — switch league above to browse a different one
+    • Covers NHL, AHL, ECHL, and PWHL — switch league above to browse a different one
 </div>
 
 <script>
@@ -440,9 +441,23 @@
         { value: "61",  abbr: "ORL", name: "Orlando Solar Bears",        league: "echl", division: "South" },
         { value: "102", abbr: "SAV", name: "Savannah Ghost Pirates",     league: "echl", division: "South" },
         { value: "18",  abbr: "SC",  name: "South Carolina Stingrays",   league: "echl", division: "South" },
+        // ── PWHL — East ──
+        { value: "1",  abbr: "BOS", name: "Boston Fleet",         league: "pwhl", division: "East" },
+        { value: "11", abbr: "HAM", name: "Hamilton Havoc",       league: "pwhl", division: "East" },
+        { value: "3",  abbr: "MTL", name: "Montréal Victoire",    league: "pwhl", division: "East" },
+        { value: "4",  abbr: "NY",  name: "New York Sirens",      league: "pwhl", division: "East" },
+        { value: "5",  abbr: "OTT", name: "Ottawa Charge",        league: "pwhl", division: "East" },
+        { value: "6",  abbr: "TOR", name: "Toronto Sceptres",     league: "pwhl", division: "East" },
+        // ── PWHL — West ──
+        { value: "10", abbr: "DET", name: "Detroit Clutch",       league: "pwhl", division: "West" },
+        { value: "2",  abbr: "MIN", name: "Minnesota Frost",      league: "pwhl", division: "West" },
+        { value: "13", abbr: "SJ",  name: "San Jose Sea Lions",   league: "pwhl", division: "West" },
+        { value: "8",  abbr: "SEA", name: "Seattle Torrent",      league: "pwhl", division: "West" },
+        { value: "9",  abbr: "VAN", name: "Vancouver Goldeneyes", league: "pwhl", division: "West" },
+        { value: "12", abbr: "VGS", name: "Vegas Vanguards",      league: "pwhl", division: "West" },
     ];
 
-    var LEAGUE_LABEL = { nhl: "NHL", ahl: "AHL", echl: "ECHL" };
+    var LEAGUE_LABEL = { nhl: "NHL", ahl: "AHL", echl: "ECHL", pwhl: "PWHL" };
 
     // Preferred display order for known divisions. This is only for sorting —
     // the actual team/division data below (and anything merged in later from
@@ -453,6 +468,7 @@
         nhl:  ["Atlantic", "Metropolitan", "Central", "Pacific"],
         ahl:  ["Atlantic", "Central", "North", "Pacific"],
         echl: ["Central", "Mountain", "North", "South"],
+        pwhl: ["East", "West"],
     };
 
     function getDivisionsForLeague(league) {
@@ -566,7 +582,7 @@
         // rather than relying on TEAMS order, since mergeLiveTeams() moves any
         // league that refreshed to the end of the array (e.g. if only the NHL
         // list loads, "Bruins" would otherwise put Providence ahead of Boston).
-        var LEAGUE_RANK = { nhl: 0, ahl: 1, echl: 2 };
+        var LEAGUE_RANK = { nhl: 0, ahl: 1, echl: 2, pwhl: 3 };
         direct = direct
             .map(function(t, i) { return { t: t, i: i, s: matchScore(t) }; })
             .sort(function(a, b) { return (b.s - a.s) || (LEAGUE_RANK[a.t.league] - LEAGUE_RANK[b.t.league]) || (a.i - b.i); })
@@ -860,7 +876,7 @@
     // list on request and pushes it back here — this replaces the entries for
     // any league that responded, leaving the others on the static fallback.
     function mergeLiveTeams(liveTeams) {
-        var leagues = ['nhl', 'ahl', 'echl'];
+        var leagues = ['nhl', 'ahl', 'echl', 'pwhl'];
         var updated = [];
         leagues.forEach(function(league) {
             if (!liveTeams[league] || !liveTeams[league].length) return;

@@ -1,14 +1,14 @@
 {
     "Author": "T.J. Lauerman aka ThatSportsGamer",
     "CodePath": "plugin.js",
-    "Description": "Shows live NHL, AHL, and ECHL scores on your Stream Deck. Track one team per key, or lay out tonight's games with the Scoreboard action — score, period, goal lamp and game status at a glance.",
+    "Description": "Shows live NHL, AHL, ECHL, and PWHL scores on your Stream Deck. Track one team per key, or lay out tonight's games with the Scoreboard action — score, period, goal lamp and game status at a glance.",
     "Name": "Live NHL Scores",
     "UUID": "com.tj.livenhlscores",
     "Category": "Live Sports Scores",
     "URL": "https://github.com/ThatSportsGamer/live-nhl-scores-for-stream-deck",
     "Icon": "imgs/plugin-icon",
     "CategoryIcon": "imgs/category-icon",
-    "Version": "1.2.4.0",
+    "Version": "1.3.0.0",
     "SDKVersion": 3,
     "Software": {
         "MinimumVersion": "7.1"

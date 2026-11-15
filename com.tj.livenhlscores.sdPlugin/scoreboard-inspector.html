@@ -81,6 +81,7 @@
     <option value="nhl">NHL (up to 16 keys)</option>
     <option value="ahl">AHL (up to 16 keys)</option>
     <option value="echl">ECHL (up to 15 keys)</option>
+    <option value="pwhl">PWHL (up to 6 keys)</option>
 </select>
 <div class="hint" id="pickHint" style="display:none;">Pick what this key shows.</div>
 <div class="hint" id="countHint">Most nights need fewer keys. Extra keys show No Game; if you run short, the last key shows +N more.</div>
@@ -121,7 +122,7 @@
     • Shows today's games in start-time order; the day moves on at 2:00 AM. No games today? It shows the next game day's schedule<br>
     • Every goal plays the goal lamp in the scoring team's color, then a goal card (NHL: EV/PPG/SHG/EN/PS +1)<br>
     • Keys refresh every <strong>30 seconds</strong><br>
-    • Press any key to open that game's Gamecenter (AHL/ECHL: the game report)<br>
+    • Press any key to open that game's Gamecenter (AHL/ECHL/PWHL: the game report)<br>
     • Changes here apply to this whole board: the block of Scoreboard keys this key is part of
 </div>
 
@@ -175,7 +176,7 @@
     function showBlock(n) {
         var el = document.getElementById('blockHint');
         if (n > 1) {
-            el.textContent = 'This board has ' + n + ' keys. Changing any setting here changes all of them. To keep boards separate, leave a gap between them.';
+            el.textContent = 'Changing any setting here changes all ' + n + ' touching keys with these settings. Keys with the same settings join one board even if they don\'t touch; to change one group on its own, leave a gap between groups.';
             el.style.display = '';
         } else {
             el.style.display = 'none';
