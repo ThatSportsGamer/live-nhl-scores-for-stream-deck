@@ -291,7 +291,7 @@
 <div class="field" id="customLinkField" style="display: none;">
     <label for="customLinkInput">Custom URL</label>
     <input type="text" id="customLinkInput" placeholder="e.g. https://www.foxsports.com/live/your-rsn" autocomplete="off"/>
-    <div class="bg-hint">Opens NHL.com Gamecenter until the game actually starts, then this URL instead — handy for a regional sports network's live-game page or any other link you'd rather use. Keeps opening it for 30 minutes after the final horn, then reverts to Gamecenter.</div>
+    <div class="bg-hint">Opens when the game starts, until 30 minutes after the final.</div>
 </div>
 
 <div class="field" style="margin-top: 16px;">
@@ -305,7 +305,7 @@
         <input type="range" id="bgOpacityInput" min="10" max="100" value="100"/>
         <span class="opacity-value" id="bgOpacityValue">100%</span>
     </div>
-    <div class="bg-hint">Score and status text is white (or your team's color) — lighter or brighter backgrounds can make it harder to read.</div>
+    <div class="bg-hint">Light colors can make the text hard to read.</div>
 </div>
 
 <div class="field" style="margin-top: 16px;">
@@ -314,18 +314,11 @@
         <input type="checkbox" id="goalLampEnabled" checked/>
         <label for="goalLampEnabled">Flash the goal lamp when a goal is scored</label>
     </div>
-    <div class="bg-hint">Plays a few seconds of red goal light on the scoring team's color whenever either team scores, then a short card with the team and type of goal (e.g. PPG +1; AHL/ECHL/PWHL show GOAL +1). Turn it off to get a quick solid flash in the scoring team's color instead.</div>
+    <div class="bg-hint">Off: a quick flash in the scoring team's color instead.</div>
 </div>
 
 <div class="info-box">
-    <strong>How it works:</strong><br>
-    • Scores refresh automatically every <strong>30 seconds</strong><br>
-    • Press the key anytime to open the game recap or gamecenter<br>
-    • A goal lamp animation plays on the key when either team scores<br>
-    • Shows score + period/time during live games<br>
-    • Shows matchup and start time before the game<br>
-    • Shows Final / Final/OT / Final/SO when the game ends<br>
-    • Covers NHL, AHL, ECHL, and PWHL — switch league above to browse a different one
+    Refreshes every <strong>30 seconds</strong>. Covers the NHL, AHL, ECHL and PWHL.
 </div>
 
 <script>

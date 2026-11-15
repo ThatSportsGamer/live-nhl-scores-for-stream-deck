@@ -5,7 +5,7 @@ Full version history for Live NHL Scores, newest first. The [README](README.md) 
 **v1.3.0.0**
 - New: the **PWHL**. All 12 teams for 2026-27 are in, including the four new ones (Detroit Clutch, Hamilton Havoc, San Jose Sea Lions, Vegas Vanguards). Track a team on its own key or pick PWHL for a Scoreboard (up to 6 keys). Goals get the goal lamp and a GOAL +1 card, finals get fireworks, and a key press opens the official game report
 - Team search and the league dropdown include the PWHL, with teams grouped by East and West
-- The Scoreboard settings panel now explains boards correctly: keys with the same settings join one board even if they don't touch, and a settings change covers the touching keys with those settings (leave a gap to change one group on its own)
+- Shorter settings panels (the details are in the README), and the Scoreboard board hint is fixed: it now says how many touching keys a change applies to
 
 **v1.2.4.0**
 - Fixed: removing a key from a Scoreboard now updates the remaining keys right away instead of up to 30 seconds later. For example, delete one of three keys on a three-game board and the last key switches to "+N more" immediately

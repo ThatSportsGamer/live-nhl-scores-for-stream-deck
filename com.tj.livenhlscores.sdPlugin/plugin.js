@@ -221,8 +221,8 @@ function handleEvent(ev) {
             instances.set(context, (payload && payload.settings) || {});
             log('willAppear — settings:', instances.get(context));
             if (refreshTimers.has(context)) clearInterval(refreshTimers.get(context));
-            refreshTimers.set(context, setInterval(() => refreshButton(context), 30_000));
-            refreshButton(context);
+            refreshTimers.set(context, setInterval(() => refreshKey(context), 30_000));
+            refreshKey(context);
             break;
 
         case 'willDisappear':
@@ -245,7 +245,7 @@ function handleEvent(ev) {
             instances.set(context, (payload && payload.settings) || {});
             log('didReceiveSettings:', instances.get(context));
             lastRender.delete(context);
-            refreshButton(context);
+            refreshKey(context);
             break;
 
         case 'keyUp': {
@@ -256,7 +256,7 @@ function handleEvent(ev) {
             if (url) ws.send(JSON.stringify({ event: 'openUrl', payload: { url } }));
             if (!(game && game.link)) {
                 lastRender.delete(context);
-                refreshButton(context);
+                refreshKey(context);
             }
             break;
         }
@@ -267,7 +267,7 @@ function handleEvent(ev) {
             } else if (payload && payload.settings) {
                 instances.set(context, payload.settings);
                 lastRender.delete(context);
-                refreshButton(context);
+                refreshKey(context);
             }
             break;
     }
@@ -298,7 +298,7 @@ function scheduleFallbackUrl(league, teamId) {
 // link — e.g. a regional sports network's live-game page — through the final
 // and for 30 minutes after it, then back to Gamecenter for the recap. Falls
 // back to the normal link if no custom URL is configured yet, or if the game
-// hasn't started, so the button never opens a blank tab or jumps the gun on a
+// hasn't started, so the key never opens a blank tab or jumps the gun on a
 // stream that isn't live yet.
 // Tidies a user-typed Custom Link: trims whitespace and adds https:// when no
 // scheme was typed ("www.foxsports.com/live/sny" -> "https://www.foxsports.com/live/sny"),
@@ -328,14 +328,14 @@ function resolveLink(cfg, game, context) {
     return scheduleFallbackUrl(cfg.league || 'nhl', cfg.teamId);
 }
 
-// ── Refresh one button ────────────────────────────────────────────────────────
-async function refreshButton(context) {
+// ── Refresh one key ───────────────────────────────────────────────────────────
+async function refreshKey(context) {
     if (refreshing.has(context)) { log('Refresh already in progress, skipping'); return; }
     if (flashing.has(context))   { log('Flash in progress, skipping refresh'); return; }
 
     const cfg = instances.get(context);
     if (!cfg || !cfg.teamId) {
-        setButton(context, ['Select A', 'Team In', 'Settings']);
+        setKey(context, ['Select A', 'Team In', 'Settings']);
         return;
     }
 
@@ -351,14 +351,14 @@ async function refreshButton(context) {
         presentGame(context, game, cfg);
     } catch (err) {
         log('Fetch error:', err.message);
-        setButton(context, [cfg.teamAbbr || league.toUpperCase(), 'Err'], undefined, resolveBgColor(cfg));
+        setKey(context, [cfg.teamAbbr || league.toUpperCase(), 'Err'], undefined, resolveBgColor(cfg));
     } finally {
         refreshing.delete(context);
     }
 }
 
 // Draws one key for one game: fireworks on live → final, the goal lamp (or
-// flash) + goal card, or the plain score. Shared by team keys (refreshButton)
+// flash) + goal card, or the plain score. Shared by team keys (refreshKey)
 // and Scoreboard keys (renderBoardKey).
 function presentGame(context, game, cfg) {
     const league = cfg.league || 'nhl';
@@ -429,7 +429,7 @@ function presentGame(context, game, cfg) {
                                      : teamColor(league, game.homeId);
                     log('Goal — flashing', color);
                     refreshing.delete(context);
-                    flashButton(context, color, lines, spacing, resolveBgColor(cfg)).catch(e => log('flashButton error:', e.message));
+                    flashKey(context, color, lines, spacing, resolveBgColor(cfg)).catch(e => log('flashKey error:', e.message));
                     return;
                 }
             }
@@ -439,10 +439,10 @@ function presentGame(context, game, cfg) {
         goalHigh.delete(context);
     }
 
-    setButton(context, lines, spacing, resolveBgColor(cfg));
+    setKey(context, lines, spacing, resolveBgColor(cfg));
 }
 
-// ── Build button display lines ────────────────────────────────────────────────
+// ── Build key display lines ───────────────────────────────────────────────────
 function buildLines(game, cfg) {
     const abbr = cfg.teamAbbr || (cfg.league || 'NHL').toUpperCase();
     if (!game)                     return [abbr, 'No Game'];
@@ -657,7 +657,7 @@ function todayDateStr() {
 // If a feed stops answering, the last good response for that same URL keeps
 // driving the keys for up to STALE_MAX_MS instead of dropping every key to
 // "Err", and a small amber dot marks them as not live (isStale(), drawn by
-// setButton). Failures with nothing usable cached still reject, as before.
+// setKey). Failures with nothing usable cached still reject, as before.
 const FETCH_TTL_MS = 20_000;
 const STALE_MAX_MS = 10 * 60_000;
 const jsonCache = new Map(); // url -> { at, promise }
@@ -922,7 +922,7 @@ function isStaleHockeyTechFinal(g) {
 
 // Picks the single most relevant game for this team out of the ±3 day window:
 // a game in progress beats an upcoming game, which beats a past final (so the
-// button holds the last result until the next game appears on the schedule).
+// key holds the last result until the next game appears on the schedule).
 function parseHockeyTechScores(data, league, teamId) {
     try {
         const games = data?.SiteKit?.Scorebar;
@@ -1120,7 +1120,7 @@ function fmtTime(iso) {
     catch (e) { return '?:??'; }
 }
 
-// ── SVG button renderer ───────────────────────────────────────────────────────
+// ── SVG key renderer ──────────────────────────────────────────────────────────
 function escXml(s) {
     return String(s).replace(/[&<>"']/g, c =>
         ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c]));
@@ -1130,7 +1130,7 @@ function escXml(s) {
 // into a fill/opacity pair the SVG <rect> can use directly. Falls back to
 // plain black for anyone who hasn't set a custom background — same look as
 // before this feature existed. This is deliberately only applied to the
-// steady-state button (pre-game/live/final/err) — the score-flash and
+// steady-state key (pre-game/live/final/err) — the score-flash and
 // end-of-game fireworks effects keep using their own dynamic colors on top
 // of it.
 function resolveBgColor(cfg) {
@@ -1306,7 +1306,7 @@ async function playFireworks(context, winnerName, winnerColor) {
         if (!keyAlive(context)) return; // key left the screen mid-animation — nothing to redraw
         // A Scoreboard key redraws its slot; a team key refetches its game.
         if (boardKeys.has(context)) renderBoardKey(context, boardSlotGame.get(context) || null);
-        else refreshButton(context);
+        else refreshKey(context);
     }
 }
 
@@ -1435,19 +1435,19 @@ async function playGoalLamp(context, lines, spacing, restColor = 'black', lampBg
         }
         if (card && keyAlive(context)) {
             // always black, even with a custom key background
-            setButton(context, card, 1.3, 'black', true);
+            setKey(context, card, 1.3, 'black', true);
             await sleep(GOAL_LABEL_MS);
         }
     } finally {
         flashing.delete(context);
-        if (keyAlive(context)) setButton(context, lines, spacing, restColor, true);
+        if (keyAlive(context)) setKey(context, lines, spacing, restColor, true);
     }
 }
 
 // bgColor may be a plain CSS color string (flash colors, 'black') or a
 // { fill, opacity } object (resolveBgColor's output) — normalized to the
 // latter here so makeImage always gets a fill string + numeric opacity.
-function setButton(context, lines, lineSpacing, bgColor, force) {
+function setKey(context, lines, lineSpacing, bgColor, force) {
     const bg = (bgColor && typeof bgColor === 'object') ? bgColor : { fill: bgColor || 'black', opacity: 1 };
     const stale = isStale();
     const key = JSON.stringify({ lines, bg, stale });
@@ -1463,7 +1463,7 @@ function keyAlive(context) { return instances.has(context) || boardKeys.has(cont
 
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
-async function flashButton(context, color, lines, spacing, restColor = 'black') {
+async function flashKey(context, color, lines, spacing, restColor = 'black') {
     if (flashing.has(context)) return;
     flashing.add(context);
     log('→ flash', color);
@@ -1471,14 +1471,14 @@ async function flashButton(context, color, lines, spacing, restColor = 'black') 
         // solid color, no text, 5 blinks (2.0 s)
         for (let i = 0; i < 5; i++) {
             if (!keyAlive(context)) return;
-            setButton(context, [''], spacing, color, true);
+            setKey(context, [''], spacing, color, true);
             await sleep(200);
-            setButton(context, [''], spacing, restColor, true);
+            setKey(context, [''], spacing, restColor, true);
             await sleep(200);
         }
     } finally {
         flashing.delete(context);
-        if (keyAlive(context)) setButton(context, lines, spacing, restColor, true);
+        if (keyAlive(context)) setKey(context, lines, spacing, restColor, true);
     }
 }
 
@@ -1718,7 +1718,7 @@ async function refreshBoard() {
         for (const [ctx, k] of boardKeys) {
             if (k.settings.unset) {   // not on any board: prompt only, never fetched for
                 clearKeyMemory(ctx); boardOverflow.delete(ctx);
-                if (!flashing.has(ctx)) setButton(ctx, ['Select A', 'League In', 'Settings']);
+                if (!flashing.has(ctx)) setKey(ctx, ['Select A', 'League In', 'Settings']);
                 continue;
             }
             const id = k.device + '#' + boardSig(k.settings);
@@ -1737,7 +1737,7 @@ async function refreshBoard() {
         for (const b of boards.values()) {
             const st     = b.settings, cfg = boardKeyCfg(st), day = days.get(st.league);
             const sorted = sortBoardKeys(b.keys.slice(), st.sortOrder);
-            if (!day) { for (const ctx of sorted) if (!flashing.has(ctx)) setButton(ctx, [BOARD_LEAGUES[st.league].label, 'Err'], undefined, resolveBgColor(cfg)); continue; }
+            if (!day) { for (const ctx of sorted) if (!flashing.has(ctx)) setKey(ctx, [BOARD_LEAGUES[st.league].label, 'Err'], undefined, resolveBgColor(cfg)); continue; }
             const games = boardGameList(day, st);
             const over  = games.length > sorted.length;
             const slots = over ? sorted.length - 1 : sorted.length;
@@ -1746,14 +1746,14 @@ async function refreshBoard() {
                 const ctx = sorted[sorted.length - 1];
                 overflow.add(ctx);
                 clearKeyMemory(ctx);
-                setButton(ctx, [{ text: '+' + (games.length - slots), fs: 22, color: '#FFD700' }, { text: 'more', fs: 13, color: '#999999' }], 1.3, resolveBgColor(cfg));
+                setKey(ctx, [{ text: '+' + (games.length - slots), fs: 22, color: '#FFD700' }, { text: 'more', fs: 13, color: '#999999' }], 1.3, resolveBgColor(cfg));
             }
             log('Scoreboard ' + BOARD_LEAGUES[st.league].label + ': ' + games.length + ' games, ' + sorted.length + ' keys');
         }
         boardOverflow = overflow;
     } catch (err) {
         log('Scoreboard error:', err.message);
-        for (const ctx of boardKeys.keys()) if (!flashing.has(ctx)) setButton(ctx, ['NHL', 'Err']);
+        for (const ctx of boardKeys.keys()) if (!flashing.has(ctx)) setKey(ctx, ['NHL', 'Err']);
     } finally {
         boardRefreshing = false;
         scheduleBoard();
@@ -1763,12 +1763,12 @@ async function refreshBoard() {
 function renderBoardKey(context, game, cfg) {
     if (flashing.has(context)) return;
     const k = boardKeys.get(context);
-    if (k && k.settings.unset) { setButton(context, ['Select A', 'League In', 'Settings']); return; }
+    if (k && k.settings.unset) { setKey(context, ['Select A', 'League In', 'Settings']); return; }
     cfg = cfg || boardKeyCfg(k ? k.settings : boardCfg({}));
     boardSlotGame.set(context, game);
     if (!game) {
         prevScores.delete(context); prevState.delete(context); goalHigh.delete(context);
-        setButton(context, ['No', 'Game'], undefined, resolveBgColor(cfg));   // matches the other Scoreboards
+        setKey(context, ['No', 'Game'], undefined, resolveBgColor(cfg));   // matches the other Scoreboards
         return;
     }
     presentGame(context, game, cfg);
