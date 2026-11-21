@@ -1,8 +1,8 @@
-# Live NHL Scores — Stream Deck Plugin
+# Live NHL Scores: Stream Deck Plugin
 
 ![Live NHL Scores in action](assets/LiveNHLScoresThumbnail.png)
 
-A Stream Deck plugin that shows live hockey scores directly on your keys — **NHL, AHL, ECHL, and PWHL**. Two actions: **Live NHL Scores** tracks one team per key, and **Live NHL Scoreboard** fills your keys with today's games for a league. Keys update automatically every 30 seconds.
+A Stream Deck plugin that shows live hockey scores directly on your keys—**NHL, AHL, ECHL, and PWHL**. Two actions: **Live NHL Scores** tracks one team per key, and **Live NHL Scoreboard** fills your keys with today's games for a league. Keys update automatically every 30 seconds.
 
 ![Live NHL Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.3.0-green) [![Elgato Marketplace](https://img.shields.io/badge/Elgato-Marketplace-black)](https://marketplace.elgato.com/product/live-nhl-scores-b463d273-9e52-4062-bfba-c30089b0c677)
 
@@ -10,19 +10,19 @@ A Stream Deck plugin that shows live hockey scores directly on your keys — **N
 
 ## Features
 
-- **Four leagues** — NHL, AHL, ECHL, and PWHL, 106 teams total
-- **Search by name or city** — type a team or location in the settings panel for instant results across all four leagues
-- **Browse by league and division** — or pick a league, then a division, then a team from the dropdowns
-- **Live scores** — shows away score, home score, and current period/time while a game is in progress
-- **Pre-game** — the two teams stacked (`TOR` over `@ BOS`) and the start time; on off days, your team's next game with its day and time
-- **Final scores** — shows the final score with a "Final", "Final/OT", or "Final/SO" label
-- **Goal lamp** — when either team scores, the key plays a few seconds of red goal light on the scoring team's color; for NHL games it's followed by a short card with the team and type of goal (e.g. WSH / PPG +1 — EV, PPG, SHG, EN, PS), and for AHL/ECHL/PWHL games a GOAL +1 card (on by default; turn it off per key in settings to get a quick solid flash in the scoring team's primary color instead)
-- **Custom key background** — pick any color and opacity for the key background in settings
-- **Custom link** — send key presses to any URL you choose instead of Gamecenter
-- **Browser shortcut** — press any key to open that game's recap or gamecenter
-- **No-flicker updates** — keys only redraw when the display actually changes
-- **Multi-key support** — add as many team keys as you want, each refreshes independently
-- **Live NHL Scoreboard action** — a second action that lays out today's games for the NHL, AHL, ECHL or PWHL, one game per key, with the goal lamp on every goal. Different boards can live on different pages (or share one, each with its own background color)
+- **Four leagues:** NHL, AHL, ECHL, and PWHL, 106 teams total
+- **Search by name or city:** type a team or location in the settings panel for instant results across all four leagues
+- **Browse by league and division:** or pick a league, then a division, then a team from the dropdowns
+- **Live scores:** shows away score, home score, and current period/time while a game is in progress
+- **Pregame:** the two teams stacked (`TOR` over `@ BOS`) and the start time; on off days, your team's next game with its day and time
+- **Final scores:** shows the final score with a "Final", "Final/OT", or "Final/SO" label
+- **Goal lamp:** when either team scores, the key plays a few seconds of red goal light on the scoring team's color; for NHL games it's followed by a short card with the team and type of goal (e.g. WSH / PPG +1—EV, PPG, SHG, EN, PS), and for AHL/ECHL/PWHL games a GOAL +1 card (on by default; turn it off per key in settings to get a quick solid flash in the scoring team's primary color instead)
+- **Custom key background:** pick any color and opacity for the key background in settings
+- **Custom link:** send key presses to any URL you choose instead of Gamecenter
+- **Browser shortcut:** press any key to open that game's recap or gamecenter
+- **No-flicker updates:** keys only redraw when the display actually changes
+- **Multi-key support:** add as many team keys as you want, each refreshes independently
+- **Live NHL Scoreboard action:** a second action that lays out today's games for the NHL, AHL, ECHL, or PWHL, one game per key, with the goal lamp on every goal. Different boards can live on different pages (or share one, each with its own background color)
 
 ---
 
@@ -49,7 +49,7 @@ Older updates: see the full version history in [CHANGELOG.md](CHANGELOG.md).
 
 - [Elgato Stream Deck](https://www.elgato.com/stream-deck) hardware
 - [Stream Deck software](https://www.elgato.com/downloads) version 7.1 or later (Mac or Windows)
-- No account required — the plugin uses each league's free public API
+- No account required—the plugin uses each league's free public API
 
 ---
 
@@ -63,7 +63,7 @@ Older updates: see the full version history in [CHANGELOG.md](CHANGELOG.md).
 **Manual install**
 
 1. Download the latest **`Live NHL Scores.streamDeckPlugin`** from the [Releases](../../releases) page
-2. Double-click the file — Stream Deck will install it automatically
+2. Double-click the file—Stream Deck will install it automatically
 
 ---
 
@@ -80,7 +80,7 @@ That's it. The key will load your team's game within a few seconds and refresh e
 **Scoreboard:**
 
 1. Drag the **Live NHL Scoreboard** action onto as many keys as you want. 16 keys fits any NHL night
-2. In the settings panel, pick the league (NHL, AHL, ECHL or PWHL), the fill order, whether finals move to the end, the goal lamp, and an optional background color. Changes apply to the whole board the key is part of
+2. In the settings panel, pick the league (NHL, AHL, ECHL, or PWHL), the fill order, whether finals move to the end, the goal lamp, and an optional background color. Changes apply to the whole board the key is part of
 
 ---
 
@@ -131,7 +131,7 @@ BOS  1
 Final/OT
 ```
 
-**Off day** (your team's next game — the weekday, or the date when it's a week or more away):
+**Off day** (your team's next game—the weekday, or the date when it's a week or more away):
 ```
 TOR
 @ BOS
@@ -147,12 +147,12 @@ Thursday
 
 Each **Live NHL Scoreboard** key is one of today's games, in start-time order. The keys look and act just like the team keys above, including the goal lamp and goal card on every goal and fireworks at the final.
 
-- **League:** NHL, AHL, ECHL or PWHL, set per board. The dropdown shows the most keys each can need (NHL: 16, AHL: 16, ECHL: 15, PWHL: 6)
+- **League:** NHL, AHL, ECHL, or PWHL, set per board. The dropdown shows the most keys each can need (NHL: 16, AHL: 16, ECHL: 15, PWHL: 6)
 - **More games than keys:** the last key shows `+N more`. **More keys than games:** the extra keys show `No Game`. Pressing either opens the league's scores page
 - **Fill order:** top-to-bottom (default) or left-to-right. **Finals last:** optionally move finished games to the end
 - **Tip for smaller Stream Decks** (Mini, Neo, a 15-key MK.2): turn on finals last, so live and upcoming games keep their keys and finished games move to the `+N more` key.
 - **Day change:** the board keeps today's games until 5:00 AM Eastern (2:00 AM Pacific), then moves to the next day. On a day with no games it shows the next game day's schedule (each key shows the day and time on their own lines)
-- **Multiple boards:** each key remembers its own settings, so different pages can show different leagues, and boards can share a page too: give each its own background color to tell them apart. Keys with the same settings join one board even if they don't touch. A settings change covers the key and every touching key with the same settings, so leave a gap if you want to change one group on its own. New Scoreboard keys start with "Select A League" until you pick one, and changing one key only changes that key (keys placed side by side with the same settings still move together)
+- **Multiple boards:** each key remembers its own settings, so different pages can show different leagues, and boards can share a page too: give each its own background color to tell them apart. Keys with the same settings join one board even if they don't touch. A settings change covers the key and every touching key with the same settings, so leave a gap if you want to change one group on its own. New Scoreboard keys start with "Select a League" until you pick one, and changing one key only changes that key (keys placed side by side with the same settings still move together)
 - **Multiple Stream Decks:** each deck (including a Virtual Stream Deck or Stream Deck Mobile) gets its own boards
 
 ![An NHL board and an AHL board on one Stream Deck XL page](assets/LiveNHLScoreboardLeagues.png)
@@ -161,7 +161,7 @@ Each **Live NHL Scoreboard** key is one of today's games, in start-time order. T
 
 ## How It Works
 
-NHL scores come from the [NHL's free public API](https://api-web.nhle.com). AHL, ECHL and PWHL scores come from the HockeyTech/LeagueStat feed at `lscluster.hockeytech.com` — the same backend that powers theahl.com, echl.com and thepwhl.com. Both are polled once every 30 seconds per key. Scoreboard keys share one request per league per refresh, however many boards you set up. No API key or account is required for either. The plugin is fully self-contained — it uses only Node.js built-in modules and requires no external dependencies.
+NHL scores come from the [NHL's free public API](https://api-web.nhle.com). AHL, ECHL, and PWHL scores come from the HockeyTech/LeagueStat feed at `lscluster.hockeytech.com`—the same backend that powers theahl.com, echl.com, and thepwhl.com. Both are polled once every 30 seconds per key. Scoreboard keys share one request per league per refresh, however many boards you set up. No API key or account is required for either. The plugin is fully self-contained—it uses only Node.js built-in modules and requires no external dependencies.
 
 The schedule holds on the current day's games until 5 AM Eastern, i.e. 2 AM Pacific (NHL) or within a rolling multi-day window (AHL/ECHL/PWHL), so late-running games and off days stay sensible on the key.
 
@@ -175,13 +175,13 @@ Open Stream Deck → Preferences → Plugins, select **Live NHL Scores**, and cl
 
 ## Contributing
 
-Bug reports and feature requests are welcome — open an [Issue](../../issues) to get started.
+Bug reports and feature requests are welcome—open an [Issue](../../issues) to get started.
 
 ---
 
 ## Disclaimer
 
-This plugin is not affiliated with, endorsed by, or sponsored by the National Hockey League, American Hockey League, ECHL, Professional Women's Hockey League, or any of their member clubs. NHL data is sourced from the NHL's public API; AHL, ECHL and PWHL data is sourced from the HockeyTech/LeagueStat feed used by theahl.com, echl.com and thepwhl.com. This plugin is intended for individual, personal, non-commercial use only.
+This plugin is not affiliated with, endorsed by, or sponsored by the National Hockey League, American Hockey League, ECHL, Professional Women's Hockey League, or any of their member clubs. NHL data is sourced from the NHL's public API; AHL, ECHL, and PWHL data is sourced from the HockeyTech/LeagueStat feed used by theahl.com, echl.com, and thepwhl.com. This plugin is intended for individual, personal, non-commercial use only.
 
 ---
 
