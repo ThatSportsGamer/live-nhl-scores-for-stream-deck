@@ -445,11 +445,12 @@ function presentGame(context, game, cfg) {
 // ── Build key display lines ───────────────────────────────────────────────────
 function buildLines(game, cfg) {
     const abbr = cfg.teamAbbr || (cfg.league || 'NHL').toUpperCase();
-    if (!game)                     return [abbr, 'No Game'];
+    if (!game)                     return offseasonLines(abbr);
     // Upcoming game (today, or the next one on an off day): stacked layout,
     // day line by calendar days — see pregameLines / pregameWhen.
     if (game.state === 'nextgame' || game.state === 'preview') {
         const when = game.startIso ? pregameWhen(game.startIso, new Date(), false) : { day: null, time: game.time };
+        if (game.pre) return pregameLines(game.awayAbbr, game.homeAbbr, false, null, null, preseasonDayLines(game, when));
         return pregameLines(game.awayAbbr, game.homeAbbr, false, when.day, when.time);
     }
     if (game.state === 'ppd')      return pregameLines(game.awayAbbr, game.homeAbbr, false, null, null, { text: 'PPD', fs: 14, color: '#E74C3C' });
@@ -648,6 +649,16 @@ function todayDateStr() {
     return p.year + '-' + String(p.month).padStart(2, '0') + '-' + String(p.day).padStart(2, '0');
 }
 
+// Off days look ahead at most two weeks (same as Live MLB Scores); nothing in that
+// window = offseason. Keeps keys from showing a game months away all summer.
+const LOOKAHEAD_DAYS = 14;
+function lookaheadLimitStr() {
+    const d = new Date(todayDateStr() + 'T12:00:00Z');
+    d.setUTCDate(d.getUTCDate() + LOOKAHEAD_DAYS);
+    return d.toISOString().slice(0, 10);
+}
+const beyondLookahead = ymd => !!ymd && String(ymd).slice(0, 10) > lookaheadLimitStr();
+
 // ── Shared fetch cache ────────────────────────────────────────────────────────
 // Every feed read goes through cachedJson(): one request per URL per TTL no
 // matter how many keys (team keys and Scoreboard keys alike) ask for it, and
@@ -750,13 +761,14 @@ async function fetchNhlNextGame(teamAbbrVal, weekStart = 'now', hopsLeft = 4) {
     const games = (data?.games || []).slice().sort((a, b) => new Date(a.startTimeUTC) - new Date(b.startTimeUTC));
     const g     = games.find(g => g.gameState === 'FUT' || g.gameState === 'PRE');
 
+    if (g && beyondLookahead(g.gameDate)) return null;   // offseason
     if (g) {
         const awayId    = g.awayTeam?.abbrev || '???';
         const homeId    = g.homeTeam?.abbrev || '???';
         const matchup   = awayId + ' @ ' + homeId;
         const gameDate  = g.gameDate || '';
         const link      = buildNhlGameUrl(awayId, homeId, gameDate, g.id);
-        return { state: 'nextgame', matchup, startIso: g.startTimeUTC, time: fmtTime(g.startTimeUTC), awayId, homeId, awayAbbr: awayId, homeAbbr: homeId, link };
+        return { state: 'nextgame', pre: g.gameType === 1, matchup, startIso: g.startTimeUTC, time: fmtTime(g.startTimeUTC), awayId, homeId, awayAbbr: awayId, homeAbbr: homeId, link };
     }
 
     if (hopsLeft > 0 && data?.nextStartDate) {
@@ -804,7 +816,7 @@ function parseNhlGame(g) {
 
         // Pre-game / future
         if (state === 'FUT' || state === 'PRE') {
-            return { state: 'preview', matchup, startIso: g.startTimeUTC, time: fmtTime(g.startTimeUTC), awayId, homeId, awayAbbr, homeAbbr, link, eventId: gameId, startMs: Date.parse(g.startTimeUTC) };
+            return { state: 'preview', pre: g.gameType === 1, matchup, startIso: g.startTimeUTC, time: fmtTime(g.startTimeUTC), awayId, homeId, awayAbbr, homeAbbr, link, eventId: gameId, startMs: Date.parse(g.startTimeUTC) };
         }
 
         const awayGoals = g.awayTeam?.score ?? 0;
@@ -871,9 +883,31 @@ function hockeyTechGameUrl(league, gameId) {
         '?client_code=' + HOCKEYTECH[league].client_code + '&game_id=' + gameId + '&lang_id=1';
 }
 
+// HockeyTech has no per-game preseason flag: preseason is its own season ("2026-27
+// Pre-Season"), so each league's season list (cached 6 h) says which SeasonIDs to mark.
+const HT_PRE_SEASONS = {};   // league -> Set of SeasonIDs
+const htSeasonsAt    = {};   // league -> when the list was last asked for
+async function loadHtPreseasons(league) {
+    if (htSeasonsAt[league] && Date.now() - htSeasonsAt[league] < 6 * 3600e3) return;
+    htSeasonsAt[league] = Date.now();
+    const conf = HOCKEYTECH[league];
+    const url  = 'https://lscluster.hockeytech.com/feed/index.php?feed=modulekit&view=seasons' +
+        '&key=' + conf.key + '&client_code=' + conf.client_code + '&site_id=' + conf.site_id + '&lang=en&fmt=json';
+    try {
+        const data = await httpsGetJson(url);
+        HT_PRE_SEASONS[league] = new Set((data?.SiteKit?.Seasons || [])
+            .filter(s => /pre-?\s?season/i.test(s.season_name || '')).map(s => String(s.season_id)));
+    } catch (e) {
+        htSeasonsAt[league] = Date.now() - 5.5 * 3600e3;   // try again in about 30 min
+        log(league.toUpperCase() + ' seasons list failed:', e.message);
+    }
+}
+const isHtPreseason = (league, seasonId) => !!(HT_PRE_SEASONS[league] && HT_PRE_SEASONS[league].has(String(seasonId)));
+
 async function fetchHockeyTechGame(league, teamId) {
     const conf = HOCKEYTECH[league];
     const url  = hockeyTechUrl(league, 3, 3);
+    await loadHtPreseasons(league);
 
     const data = await cachedJson(url);
     const game = parseHockeyTechScores(data, league, teamId);
@@ -897,6 +931,7 @@ async function fetchHockeyTechNextGame(league, teamId) {
     const matches = games
         .filter(g => String(g.HomeID) === String(teamId) || String(g.VisitorID) === String(teamId))
         .filter(g => { const s = classifyHockeyTechStatus(g).state; return s === 'preview' || s === 'nextgame'; })
+        .filter(g => !beyondLookahead(g.Date))   // offseason past two weeks
         .sort((a, b) => new Date(a.GameDateISO8601 || a.Date) - new Date(b.GameDateISO8601 || b.Date));
 
     if (!matches.length) { log(league.toUpperCase() + ' API: no upcoming games in next 21 days for', teamId); return null; }
@@ -941,7 +976,10 @@ function parseHockeyTechScores(data, league, teamId) {
 
         // Drop stale finals so an offseason key falls through to the next scheduled
         // game (fetchHockeyTechNextGame) instead of showing last season's result.
-        const matches = teamGames.filter(g => !isStaleHockeyTechFinal(g));
+        // The feed can hand back a game weeks outside the window in the offseason;
+        // past the two-week look-ahead it counts as nothing scheduled.
+        const matches = teamGames.filter(g => !isStaleHockeyTechFinal(g))
+            .filter(g => !(classifyHockeyTechStatus(g).state === 'nextgame' && beyondLookahead(g.Date)));
         if (!matches.length) { log(league.toUpperCase() + ' API: only stale finals for team', teamId, '— falling through to next game'); return null; }
 
         let best = null, bestRank = -1, bestTime = null;
@@ -1009,7 +1047,7 @@ function parseHockeyTechGame(g, league) {
     if (status.state === 'preview' || status.state === 'nextgame') {
         const startISO = g.GameDateISO8601 || g.Date;
         const time     = fmtTime(startISO);
-        return { state: status.state, matchup, startIso: startISO, time, awayId, homeId, awayAbbr, homeAbbr, link, eventId, startMs };
+        return { state: status.state, pre: isHtPreseason(league, g.SeasonID), matchup, startIso: startISO, time, awayId, homeId, awayAbbr, homeAbbr, link, eventId, startMs };
     }
 
     const awayGoals = parseInt(g.VisitorGoals, 10) || 0;
@@ -1161,6 +1199,30 @@ function resolveBgColor(cfg) {
 // (Windows + XL, Mac + Mini) with a separate font-test plugin, 2026-10-17.
 const PRE_TEAM_FS = 16, PRE_AT_FS = 10, PRE_DAY_FS = 11.5, PRE_TIME_FS = 11.5, PRE_GAMEDAY_TIME_FS = 14;
 const PRE_SPACING = 1.12, PRE_DAY_COLOR = '#BBBBBB', PRE_MAX_W = 66;
+const PRESEASON_COLOR = '#2ECC71';   // preseason day line (same green as Live MLB Scores' spring training line)
+
+// Offseason: nothing scheduled in the next two weeks (LOOKAHEAD_DAYS). The team (or
+// league) over a gray "Offseason", in place of the old "No Game".
+function offseasonLines(name) {
+    let fs = 18;
+    while (fs > 9 && preWidth(name, fs) > PRE_MAX_W) fs -= 0.5;
+    return [{ text: name, fs }, { text: 'Offseason', fs: PRE_DAY_FS, color: PRE_DAY_COLOR }];
+}
+
+// Preseason day line, in green: "PRE Today" on game day, "PRE Sun" within the week,
+// "PRE 11/22" further out (T.J., 2026-11-21: "PRE Sun 11/22" is too wide).
+function preseasonDayLines(game, when) {
+    let label = 'PRE Today';
+    if (when.day) {
+        try {
+            const d = new Date(game.startIso);
+            label = 'PRE ' + (when.day.includes(' ')
+                ? d.toLocaleDateString([], { month: 'numeric', day: 'numeric' })
+                : d.toLocaleDateString([], { weekday: 'short' }));
+        } catch (e) { label = 'PRE'; }
+    }
+    return [{ text: label, fs: PRE_DAY_FS, color: PRESEASON_COLOR }, { text: when.time, fs: PRE_TIME_FS }];
+}
 // Helvetica-Bold advance widths (per 1000 em) — only used to shrink a team line
 // that can't fit at 16 (e.g. G League's RCITY / VALLEY); unknown glyphs count wide.
 const PRE_GLYPHS = {
@@ -1206,8 +1268,9 @@ function pregameLines(awayAbbr, homeAbbr, neutral, day, time, last) {
         { text: awayAbbr, fs: preFitFs(0, awayAbbr) },
         { home: homeAbbr, pre, afs: PRE_AT_FS, fs: preFitFs(preWidth(pre + ' ', PRE_AT_FS), homeAbbr) },
     ];
-    if (last)     lines.push(last);
-    else if (day) lines.push({ text: day, fs: PRE_DAY_FS, color: PRE_DAY_COLOR }, { text: time, fs: PRE_TIME_FS });
+    if (Array.isArray(last)) lines.push(...last);
+    else if (last) lines.push(last);
+    else if (day)  lines.push({ text: day, fs: PRE_DAY_FS, color: PRE_DAY_COLOR }, { text: time, fs: PRE_TIME_FS });
     else          lines.push({ text: time, fs: PRE_GAMEDAY_TIME_FS });
     lines.spacing = PRE_SPACING;
     return lines;
@@ -1505,7 +1568,9 @@ async function flashKey(context, color, lines, spacing, restColor = 'black') {
 //  • Each board can have its own custom key background color.
 //  • New keys start on the NHL.
 //  • "Today" rolls over at 2am, same as the team keys. On a day with no games
-//    the board shows the next game day's schedule, with the day on each key.
+//    the board shows the next game day's schedule (within two weeks), with the
+//    day on each key. Nothing in two weeks = offseason: the first key shows the
+//    league over "Offseason", the rest go blank.
 //  • More games than keys → the last key shows "+N more" (opens the league's
 //    scores page). Extra keys show "No Game".
 //  • One request per league per refresh (cached 20s), shared by every board.
@@ -1672,7 +1737,7 @@ async function fetchNhlBoardDay() {
     let games = parseAll(data, false);
     // No games today: walk forward to the next game day (All-Star break,
     // holidays, the gap before the playoffs) — a week's worth of hops at most.
-    for (let hops = 0; !games.length && data?.nextDate && hops < 7; hops++) {
+    for (let hops = 0; !games.length && data?.nextDate && !beyondLookahead(data.nextDate) && hops < 7; hops++) {
         data  = await cachedJson('https://api-web.nhle.com/v1/score/' + data.nextDate);
         games = parseAll(data, true);
     }
@@ -1681,15 +1746,16 @@ async function fetchNhlBoardDay() {
 
 async function fetchHockeyTechBoardDay(league) {
     const today = todayDateStr();
+    await loadHtPreseasons(league);
     // same ±3 day window the team keys ask for (rows are filtered to today
     // below), so a board and team keys on the same league share one request
     const data  = await cachedJson(hockeyTechUrl(league, 3, 3));
     let rows = (data?.SiteKit?.Scorebar || []).filter(g => (g.Date || '').slice(0, 10) === today);
     let futureDay = false;
     if (!rows.length) {
-        // No games today: the next date on the schedule within three weeks.
+        // No games today: the next date on the schedule within two weeks (offseason past that).
         const ahead = await cachedJson(hockeyTechUrl(league, 0, 21), NEXT_GAME_TTL_MS);
-        const future = (ahead?.SiteKit?.Scorebar || []).filter(g => (g.Date || '').slice(0, 10) > today);
+        const future = (ahead?.SiteKit?.Scorebar || []).filter(g => (g.Date || '').slice(0, 10) > today && !beyondLookahead(g.Date));
         const next = future.map(g => g.Date.slice(0, 10)).sort()[0];
         rows = next ? future.filter(g => g.Date.slice(0, 10) === next) : [];
         futureDay = true;
@@ -1746,6 +1812,7 @@ async function refreshBoard() {
             const sorted = sortBoardKeys(b.keys.slice(), st.sortOrder);
             if (!day) { for (const ctx of sorted) if (!flashing.has(ctx)) setKey(ctx, [BOARD_LEAGUES[st.league].label, 'Err'], undefined, resolveBgColor(cfg)); continue; }
             const games = boardGameList(day, st);
+            if (!games.length) { sorted.forEach((ctx, i) => renderBoardOffseason(ctx, i === 0, st, cfg)); continue; }
             const over  = games.length > sorted.length;
             const slots = over ? sorted.length - 1 : sorted.length;
             for (let i = 0; i < slots; i++) renderBoardKey(sorted[i], games[i] || null, cfg);
@@ -1765,6 +1832,15 @@ async function refreshBoard() {
         boardRefreshing = false;
         scheduleBoard();
     }
+}
+
+// Offseason board (nothing in the next two weeks): the first key names the league over
+// "Offseason", the rest go blank (a press still opens the league's scores page).
+function renderBoardOffseason(context, first, st, cfg) {
+    if (flashing.has(context)) return;
+    boardSlotGame.set(context, null);
+    prevScores.delete(context); prevState.delete(context); goalHigh.delete(context);
+    setKey(context, first ? offseasonLines(BOARD_LEAGUES[st.league].label) : [{ text: '', fs: 16 }], 1.4, resolveBgColor(cfg));
 }
 
 function renderBoardKey(context, game, cfg) {
