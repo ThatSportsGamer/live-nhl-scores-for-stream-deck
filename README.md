@@ -4,7 +4,7 @@
 
 A Stream Deck plugin that shows live hockey scores directly on your keys—**NHL, AHL, ECHL, and PWHL**. Two actions: **Live NHL Scores** tracks one team per key, and **Live NHL Scoreboard** fills your keys with today's games for a league. Keys update automatically every 30 seconds.
 
-![Live NHL Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.3.0-green) [![Elgato Marketplace](https://img.shields.io/badge/Elgato-Marketplace-black)](https://marketplace.elgato.com/product/live-nhl-scores-b463d273-9e52-4062-bfba-c30089b0c677)
+![Live NHL Scores Plugin](https://img.shields.io/badge/Stream%20Deck-Plugin-blue) ![Version](https://img.shields.io/badge/version-1.3.1-green) [![Elgato Marketplace](https://img.shields.io/badge/Elgato-Marketplace-black)](https://marketplace.elgato.com/product/live-nhl-scores-b463d273-9e52-4062-bfba-c30089b0c677)
 
 ---
 
@@ -28,6 +28,11 @@ A Stream Deck plugin that shows live hockey scores directly on your keys—**NHL
 
 ## Recent Updates
 
+**v1.3.1.0**
+- New: preseason games get a green PRE day line: "PRE Today" on game day, "PRE Sun" within the week, and "PRE 12/1" further out. Works for the NHL, AHL, ECHL, and PWHL
+- New: in the offseason, a team key shows the team over "Offseason" instead of "No Game". Keys look ahead two weeks for the next game; nothing in that window counts as the offseason
+- New: an offseason Scoreboard shows the league over "Offseason" on its first key, with the rest blank
+
 **v1.3.0.0**
 - New: the **PWHL**. All 12 teams for 2026-27 are in, including the four new ones (Detroit Clutch, Hamilton Havoc, San Jose Sea Lions, Vegas Vanguards). Track a team on its own key or pick PWHL for a Scoreboard (up to 6 keys). Goals get the goal lamp and a GOAL +1 card, finals get fireworks, and a key press opens the game's page on thepwhl.com
 - Team search and the league dropdown include the PWHL, with teams grouped by East and West
@@ -35,11 +40,6 @@ A Stream Deck plugin that shows live hockey scores directly on your keys—**NHL
 
 **v1.2.4.0**
 - Fixed: removing a key from a Scoreboard now updates the remaining keys right away instead of up to 30 seconds later. For example, delete one of three keys on a three-game board and the last key switches to "+N more" immediately
-
-**v1.2.3.0**
-- Fixed: adding a new Scoreboard key next to an existing board no longer copies that board's league. New Scoreboard keys start with "Select A League", and changing one key only changes that key (keys placed side by side with the same settings still move together)
-- The Scoreboard settings panel now tells you how many keys are in the board you're editing, since changing a setting changes all of them (leave a gap between boards to keep them separate)
-- Team search now lists the best matches first: an exact abbreviation (try "BOS" or "NY"), then names that start with what you typed, then names that contain it
 
 Older updates: see the full version history in [CHANGELOG.md](CHANGELOG.md).
 
@@ -131,12 +131,26 @@ BOS  1
 Final/OT
 ```
 
-**Off day** (your team's next game—the weekday, or the date when it's a week or more away):
+**Off day** (your team's next game—the weekday, or the date when it's a week or more away; keys look two weeks ahead):
 ```
 TOR
 @ BOS
 Thursday
 7:00 PM
+```
+
+**Preseason** (a green PRE day line: `PRE Today`, the weekday within the week, or the date further out):
+```
+MIN
+@ VGS
+PRE Sun
+7:00 PM
+```
+
+**Offseason** (nothing scheduled in the next two weeks):
+```
+ TOR
+Offseason
 ```
 
 ---
@@ -151,7 +165,7 @@ Each **Live NHL Scoreboard** key is one of today's games, in start-time order. T
 - **More games than keys:** the last key shows `+N more`. **More keys than games:** the extra keys show `No Game`. Pressing either opens the league's scores page
 - **Fill order:** top-to-bottom (default) or left-to-right. **Finals last:** optionally move finished games to the end
 - **Tip for smaller Stream Decks** (Mini, Neo, a 15-key MK.2): turn on finals last, so live and upcoming games keep their keys and finished games move to the `+N more` key.
-- **Day change:** the board keeps today's games until 5:00 AM Eastern (2:00 AM Pacific), then moves to the next day. On a day with no games it shows the next game day's schedule (each key shows the day and time on their own lines)
+- **Day change:** the board keeps today's games until 5:00 AM Eastern (2:00 AM Pacific), then moves to the next day. On a day with no games it shows the next game day's schedule (each key shows the day and time on their own lines). It looks two weeks ahead at most; with nothing in that window, the first key shows the league over `Offseason` and the rest go blank.
 - **Multiple boards:** each key remembers its own settings, so different pages can show different leagues, and boards can share a page too: give each its own background color to tell them apart. Keys with the same settings join one board even if they don't touch. A settings change covers the key and every touching key with the same settings, so leave a gap if you want to change one group on its own. New Scoreboard keys start with "Select a League" until you pick one, and changing one key only changes that key (keys placed side by side with the same settings still move together)
 - **Multiple Stream Decks:** each deck (including a Virtual Stream Deck or Stream Deck Mobile) gets its own boards
 

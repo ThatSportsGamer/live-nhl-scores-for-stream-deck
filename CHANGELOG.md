@@ -2,6 +2,11 @@
 
 Full version history for Live NHL Scores, newest first. The [README](README.md) lists the three most recent updates.
 
+**v1.3.1.0**
+- New: preseason games get a green PRE day line: "PRE Today" on game day, "PRE Sun" within the week, and "PRE 12/1" further out. Works for the NHL, AHL, ECHL, and PWHL
+- New: in the offseason, a team key shows the team over "Offseason" instead of "No Game". Keys look ahead two weeks for the next game; nothing in that window counts as the offseason
+- New: an offseason Scoreboard shows the league over "Offseason" on its first key, with the rest blank
+
 **v1.3.0.0**
 - New: the **PWHL**. All 12 teams for 2026-27 are in, including the four new ones (Detroit Clutch, Hamilton Havoc, San Jose Sea Lions, Vegas Vanguards). Track a team on its own key or pick PWHL for a Scoreboard (up to 6 keys). Goals get the goal lamp and a GOAL +1 card, finals get fireworks, and a key press opens the game's page on thepwhl.com
 - Team search and the league dropdown include the PWHL, with teams grouped by East and West
